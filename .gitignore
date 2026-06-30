@@ -1,0 +1,4 @@
+transcripts/*
+jds/*
+!transcripts/.gitkeep
+!jds/.gitkeep
