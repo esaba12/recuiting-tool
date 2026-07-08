@@ -3,7 +3,7 @@
 // @namespace    recruiting-os
 // @version      1.3
 // @description  Syncs accepted LeetCode submissions to Notion LC Problems DB
-// @author       the candidate
+// @author       recruiting-os
 // @match        https://leetcode.com/problems/*
 // @grant        GM_xmlhttpRequest
 // @grant        window.onurlchange
@@ -18,8 +18,15 @@
 (function () {
   'use strict';
 
+  // ── Configuration ─────────────────────────────────────────────────────────
+  // Fill these in with your own values before installing the script.
+  //   NOTION_KEY: a Notion internal integration token (starts with "ntn_"),
+  //               created at https://www.notion.so/my-integrations and shared
+  //               with your LC Problems database.
+  //   LC_DB_ID:   the ID of your LeetCode Problems database in Notion.
+  // Do NOT commit real values here — this file is part of a public repo.
   const NOTION_KEY = 'YOUR_NOTION_INTEGRATION_TOKEN';
-  const LC_DB_ID   = '9fc96722-d155-4333-9770-41130fb59a39';
+  const LC_DB_ID   = 'YOUR_LC_PROBLEMS_DB_ID';
 
   console.log('[LC→Notion] v1.3 loaded ✓ (ISOLATED_WORLD — SES-exempt)');
 

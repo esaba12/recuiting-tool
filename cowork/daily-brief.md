@@ -1,6 +1,6 @@
 # Cowork Task: Daily Morning Brief
 # Schedule: 9am, Monday-Friday (requires laptop on + Claude Desktop open)
-# Output: 3 bullets, under 150 words, emailed to your-email@example.com
+# Output: 3 bullets, under 150 words, emailed to your address
 
 Check my Notion Contacts DB for any rows where Follow-Up Date = today.
 Check Gmail for unread recruiting emails from the last 12 hours that haven't been replied to.

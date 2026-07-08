@@ -180,7 +180,7 @@ Send yourself a mock email from a different email address:
 ```
 Subject: Interview invitation — Software Engineer Internship at Stripe
 From: recruiter@stripe.com
-Body: Hi the candidate, I'm Sarah from Stripe recruiting. I'd love to schedule 
+Body: Hi Alex, I'm Sarah from Stripe recruiting. I'd love to schedule 
 a 30-minute phone screen for our SWE internship position. 
 Are you available Tuesday July 8 at 2pm EST?
 ```
@@ -194,7 +194,7 @@ Expected result:
 
 **Test 2 — Rejection:**
 ```
-Subject: Re: Software Engineer Internship Application — the candidate
+Subject: Re: Software Engineer Internship Application — Alex
 From: no-reply@greenhouse.io
 Body: Thank you for applying to [Company]. After careful review, 
 we've decided to move forward with other candidates.

@@ -3,9 +3,17 @@ jds/*
 !transcripts/.gitkeep
 !jds/.gitkeep
 
-# credentials — never commit
+# credentials & personal context — never commit
 context.md
+CLAUDE.local.md
 .env
+.env.local
+.env*.local
+*.local.md
+
+# local one-off / verification scripts
+app/.verify-*
 
 node_modules/
 .worktrees/
+.vercel

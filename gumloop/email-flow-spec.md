@@ -128,7 +128,7 @@ At 10 emails/day × 30 days = ~2,400 credits/month. Free tier = 5,000/month. ✅
 Before going live, test with these 3 email types:
 
 **Test 1 — Interview invite:**
-Send mock email: "Hi the candidate, I'd love to schedule a phone screen for our SWE intern role at Stripe. Are you available Tuesday July 8 at 2pm?"
+Send mock email: "Hi Alex, I'd love to schedule a phone screen for our SWE intern role at Stripe. Are you available Tuesday July 8 at 2pm?"
 Expected: Node 2 = INTERVIEW_INVITE, Node 5 creates contact, Node 6 creates/updates application to Phone Screen, Node 7 creates calendar event
 
 **Test 2 — Rejection:**

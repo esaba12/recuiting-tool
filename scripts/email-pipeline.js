@@ -107,7 +107,7 @@ function processRecruitingEmails() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function extractWithClaude(apiKey, subject, from, body, date) {
-  const prompt = `You are processing recruiting emails for the candidate, a a university CS sophomore (a strong GPA) targeting SWE internships Fall 2026.
+  const prompt = `You are processing recruiting emails for a CS student targeting SWE internships.
 
 Analyze this email. Return ONLY valid JSON — no explanation, no markdown.
 

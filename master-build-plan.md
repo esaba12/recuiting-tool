@@ -1,7 +1,7 @@
 # Recruiting OS — Status & Roadmap
 
 **Updated:** July 2026  
-**Goal:** Zero-touch recruiting OS for the candidate's Fall 2026 SWE internship search. Apps open August 2026.
+**Goal:** Zero-touch recruiting OS for a student's SWE internship search.
 
 ---
 
@@ -11,7 +11,7 @@
 INPUTS                          NOTION HUB                    DASHBOARD
 ──────                          ──────────                    ─────────
 Gmail ──[Apps Script+Claude]──► Contacts DB ◄──────────────► React app
-Granola ──[manual paste]──────► Calls DB    ◄──────────────► your-app.vercel.app
+Granola ──[manual paste]──────► Calls DB    ◄──────────────► Vercel-hosted app
 LeetCode ──[LeetNotion ext]───► LC Problems DB
 GitHub job boards ────────────► (localStorage buckets)
 ```
@@ -21,7 +21,7 @@ GitHub job boards ────────────► (localStorage buckets)
 ## What's Built ✅
 
 ### React + Vite Dashboard (`app/`)
-**Live:** https://your-app.vercel.app — auto-deploys on push to `main` (GitHub: `your-org/recruiting-os`, private)
+**Deploy:** auto-deploys to Vercel on push to `main`
 Local dev: `cd app && npm run dev` → http://localhost:3001
 
 | Tab | What It Does |

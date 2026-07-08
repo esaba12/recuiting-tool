@@ -70,8 +70,8 @@ Verify each connector shows "Connected" status.
 In the Cowork project, share these files/folders:
 - `context.md` (from this repo — has your personal info and DB IDs)
 - The `master-build-plan.md` (so Cowork knows the system design)
-- `transcripts/` folder (create it: `/Users/ethansaba/code/recruiter/transcripts/`) — for Granola exports
-- `jds/` folder (create it: `/Users/ethansaba/code/recruiter/jds/`) — for job description PDFs
+- `transcripts/` folder (create it at the repo root) — for Granola exports
+- `jds/` folder (create it at the repo root) — for job description PDFs
 
 Cowork will read these files when processing requests in this project.
 

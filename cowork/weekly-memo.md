@@ -1,6 +1,6 @@
 # Cowork Task: Weekly Recruiting Memo
 # Schedule: Sunday 8pm (requires laptop on + Claude Desktop open)
-# Output: 1-page memo saved to Google Drive + emailed to your-email@example.com
+# Output: 1-page memo saved to Google Drive + emailed to your address
 
 Read my Notion Contacts DB — all rows where Last Interaction was in the past 7 days.
 Read my Notion Applications DB — all rows with stage changes this week or Last Activity in the past 7 days.

@@ -1,13 +1,9 @@
 # Recruiting Intelligence System — Claude Context
 
 ## What This Repo Is
-A zero-touch recruiting OS for the candidate (a university CS sophomore, a strong GPA, Fall 2026 SWE internship recruiting). Calls, emails, and job applications flow into a Notion hub automatically. A React dashboard is the primary interface.
+A zero-touch recruiting OS for a student's SWE/PM internship search. Calls, emails, and job applications flow into a Notion hub automatically. A React dashboard is the primary interface.
 
-## Who Is the candidate
-- a university, CS-LSA, Sophomore, a strong GPA
-- Graduating May 2028
-- Targeting SWE internship (primary) and PM internship
-- Recruiting season: Fall 2026 — apps open August 2026
+> Personal profile and real deployment identifiers live in `CLAUDE.local.md` (gitignored), not in this file.
 
 ---
 
@@ -15,9 +11,9 @@ A zero-touch recruiting OS for the candidate (a university CS sophomore, a stron
 
 | Tool | Role | Status |
 |---|---|---|
-| React + Vite | Dashboard — live at https://your-app.vercel.app, dev at localhost:3001 | ✅ Deployed |
-| Vercel | Hosting — auto-deploys `main` branch via GitHub integration | ✅ Live |
-| GitHub | `your-org/recruiting-os` (private) | ✅ Connected |
+| React + Vite | Dashboard — dev at localhost:3001, deployable to Vercel | ✅ |
+| Vercel | Hosting — auto-deploys `main` branch via GitHub integration | ✅ |
+| GitHub | Source + Vercel deploy trigger | ✅ |
 | Google Apps Script | Email pipeline (Gmail → Claude → Notion) | ✅ Built, needs deploy |
 | Claude API (Haiku 4.5) | AI fit analysis, call extraction, email extraction | ✅ Wired via serverless proxy |
 | Notion | Central hub — 5 databases | ✅ Live |
@@ -60,9 +56,8 @@ context.md                  ← Gitignored, untracked — Notion/Anthropic IDs f
 
 ## Deployment
 
-- **Live URL:** https://your-app.vercel.app
-- **Vercel project:** `recruiting-os` (team `your-vercel-team`), root directory set to `app/`
-- **GitHub:** `your-org/recruiting-os` (private), Vercel auto-deploys on push to `main`
+- **Vercel project:** root directory set to `app/` (your real project/team IDs are in `CLAUDE.local.md`)
+- **GitHub:** Vercel auto-deploys on push to `main`
 - **Manual deploy:** `cd app && npx vercel --prod`
 - API keys live only as encrypted Vercel env vars (`NOTION_API_KEY`, `ANTHROPIC_API_KEY`) — never in the repo or the client bundle
 - Local dev (`npm run dev`) still uses the Vite proxy in `vite.config.js`; production uses the `api/*.js` serverless functions instead — keep both in sync if proxy behavior changes
@@ -87,11 +82,16 @@ context.md                  ← Gitignored, untracked — Notion/Anthropic IDs f
 ### Job Boards Tab (most-developed feature)
 - Input: GitHub repo URL (e.g., `github.com/speedyapply/2027-SWE-College-Jobs`) or username
 - Parses README markdown/HTML tables → structured job listings
-- Card grid with bucket system: Applying / Maybe / Applied / Pass (localStorage)
+- **Auto-import (hands-off):** every open (non-closed) listing not already in the Applications DB is created there automatically with Triage='Needs Review', Location, and Source Repo set — concurrency-limited (4 at a time), with a progress banner. Dedup is keyed on exact Company+Role text against already-fetched `apps`, guarded by an in-flight `claimedKeysRef` so a rapid re-pull or React StrictMode's dev-mode double-effect-invocation can't double-import the same job (this bug shipped once and had to be cleaned up — see `DuplicatesPanel` below).
+- Card grid with bucket system: Needs Review / Applying / Maybe / Applied / Pass — now backed by the Applications DB `Triage` field (not localStorage). Marking "Applied" bumps the real `Stage` to Applied (if still Wishlist) and sets Applied Date; marking "Pass" just tags Triage (no Stage change). `ContactDetailModal`-style optimistic local overlay (`optimistic` state) keeps bucket clicks instant without waiting on the Notion round-trip.
+- Needs-Review/Pass rows (still at Stage=Wishlist) are excluded from Overview/Pipeline/Actions "active" stats via `isUntriaged()` in `shared.jsx`, so a big board import doesn't drown out real pipeline activity. Overview shows an amber "N jobs need review" nudge when the queue is non-empty.
 - AI fit analysis per job via Claude Haiku (uses preferences panel)
 - Calendar view by posting date
 - Filter bar: free-text search (company + role + location), location text input, quick chips (Remote, Bay Area, NYC, etc.)
 - Stats bar: new this week, remote count, top locations, multi-role companies
+
+### Duplicate tracker (Pipeline tab)
+`DuplicatesPanel` in `App.jsx` groups Applications by normalized (trim+lowercase) Company+Role via `findDuplicateGroups()` in `shared.jsx`, shows counts + a reviewable list, and an explicit "Archive N duplicates" button (native `confirm()` gate, keeps the oldest row per group, archives the rest via `archiveApplication()`). Only catches exact-text duplicates, not fuzzily-worded ones across sources.
 
 ### Vite Proxy (all keys injected server-side, never in browser bundle)
 ```

@@ -20,7 +20,7 @@ Extract recruiting data from this email. Return ONLY valid JSON, no explanation,
 Rules:
 - contact_name and contact_email should be from the sender, not you
 - If multiple dates are mentioned, use the first/earliest one for interview_date
-- follow_up_draft should be written in first person as the candidate (a university CS sophomore, a strong GPA)
+- follow_up_draft should be written in first person as the candidate (a CS student targeting SWE internships)
 - Keep follow_up_draft professional but warm, under 100 words
 - For rejection emails, follow_up_draft should be a gracious thank-you reply
 

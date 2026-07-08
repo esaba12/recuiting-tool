@@ -1,14 +1,21 @@
 {
-  "name": "recruiter",
+  "name": "recruiting-os",
   "version": "1.0.0",
-  "description": "",
+  "description": "Zero-touch recruiting OS: Notion hub + React dashboard + AI email/call pipelines for an internship search",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
+  "keywords": [
+    "recruiting",
+    "notion",
+    "internship",
+    "job-search",
+    "claude",
+    "automation"
+  ],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "type": "commonjs",
   "dependencies": {
     "@notionhq/client": "^5.22.0",
