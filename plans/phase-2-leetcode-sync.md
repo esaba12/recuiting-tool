@@ -1,5 +1,11 @@
 # Phase 2 — LeetCode Sync
 
+## Current Status: SCRIPT READY — Pending Final Unblock
+
+The userscript is built and correct. One stale `chrome.userScripts` registration is blocking it from loading. See **Troubleshooting Log** at the bottom for full history.
+
+---
+
 **Branch:** `notion-setup` (worktree at `.worktrees/notion-setup/`)  
 **Time:** ~15 minutes  
 **Day:** Day 1 (do this right after Phase 1)  
@@ -147,6 +153,41 @@ No external spaced repetition tool needed. It's built into the formula.
 
 ## What Comes Next
 
-This pipeline is done. It will run automatically forever. Move to Phase 3 (Granola setup).
+Once the UUID error is gone, this pipeline runs automatically forever. Move to Phase 3 (Granola setup).
 
 The LC data feeds into the Weekly Recruiting Memo (Phase 6 → Appendix C, Task 2) where Cowork reads your weekly solves and includes them in the Sunday memo.
+
+---
+
+## Troubleshooting Log (What Was Tried)
+
+**Approach chosen:** Custom Tampermonkey userscript (browser-based solving on leetcode.com). Third-party extensions (LeetNotion Sync) rejected — no reviews, unknown safety.
+
+**Script built:** `dashboard/leetcode-notion-sync.user.js` (v1.3)
+- MutationObserver detects "Accepted" in DOM
+- LeetCode GraphQL API (`/graphql/`) fetches submission ID + code + topic tags
+- Notion REST API creates a row in LC Problems DB
+- `GM_xmlhttpRequest` handles both calls (bypasses CORS, sends session cookies)
+- All logic confirmed correct
+
+**Root problem:** First version used `@sandbox DOM` directive. This caused Tampermonkey to register the script via Chrome's `chrome.userScripts` API with UUID `58bfd8ce-469d-4bb2-926a-960ed2cf0949`. When `@sandbox DOM` was removed and the script deleted from TM dashboard, the UUID shim stayed registered in Chrome's internal `chrome.userScripts` registry and keeps firing on every page load, logging:
+```
+injected: env: missing script "58bfd8ce-469d-4bb2-926a-960ed2cf0949"
+```
+
+**What was tried to clear it:**
+1. Removed `@sandbox DOM` from script → didn't fix (shim already registered)
+2. Deleted and reinstalled script in TM dashboard → didn't fix (storage cleared but chrome.userScripts registration persisted)
+3. Searched `chrome.storage.local` for UUID → found `!extdb.@meta#58bfd8ce-...`, deleted it → didn't fix
+4. Ran `chrome.storage.local.get(null, ...)` filter for all `!extdb` keys → returned `[]` (all gone) → still didn't fix
+5. Toggled Tampermonkey off/on → didn't fix
+6. `chrome.userScripts.unregister()` from service worker console → unclear if run
+7. Force-update Tampermonkey via chrome://extensions Update button → pending
+
+**Where it stands:**
+- The stale shim is registered as chrome.userScripts ID `"3|content|wwywq+148|r|pzaaosgyre"` (confirmed by stack trace showing VM260 → content.js)
+- `chrome.storage.local` is fully clean
+- The fix that should work: chrome://extensions → Developer mode on → Update button (Chrome clears all chrome.userScripts registrations on extension update)
+- Nuclear fallback: full uninstall/reinstall of Tampermonkey
+
+**Once unblocked:** Install the script from `dashboard/leetcode-notion-sync.user.js` in Tampermonkey. It should load and log `[LC→Notion] v1.3 loaded ✓` on any `leetcode.com/problems/*` page.

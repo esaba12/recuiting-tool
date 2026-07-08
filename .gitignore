@@ -2,3 +2,10 @@ transcripts/*
 jds/*
 !transcripts/.gitkeep
 !jds/.gitkeep
+
+# credentials — never commit
+context.md
+.env
+
+node_modules/
+.worktrees/
