@@ -15,9 +15,11 @@ A zero-touch recruiting OS for the candidate (a university CS sophomore, a stron
 
 | Tool | Role | Status |
 |---|---|---|
-| React + Vite | Local dashboard at localhost:3001 | ✅ Running |
+| React + Vite | Dashboard — live at https://your-app.vercel.app, dev at localhost:3001 | ✅ Deployed |
+| Vercel | Hosting — auto-deploys `main` branch via GitHub integration | ✅ Live |
+| GitHub | `your-org/recruiting-os` (private) | ✅ Connected |
 | Google Apps Script | Email pipeline (Gmail → Claude → Notion) | ✅ Built, needs deploy |
-| Claude API (Haiku 4.5) | AI fit analysis, call extraction, email extraction | ✅ Wired via Vite proxy |
+| Claude API (Haiku 4.5) | AI fit analysis, call extraction, email extraction | ✅ Wired via serverless proxy |
 | Notion | Central hub — 4 databases | ✅ Live |
 | Granola | Call transcription (no bot) | 🔄 Download + connect |
 | LeetNotion extension | LeetCode → Notion auto-sync | 🔄 Pending install |
@@ -30,21 +32,37 @@ A zero-touch recruiting OS for the candidate (a university CS sophomore, a stron
 ## Repo Structure
 
 ```
-app/                        ← React + Vite dashboard (PRIMARY)
+app/                        ← React + Vite dashboard (PRIMARY) — Vercel root directory
   src/
     App.jsx                 ← Main app, all tabs (~1500 lines)
     github.js               ← GitHub job board parser
     notion.js               ← Notion API client
-  vite.config.js            ← Proxy config (injects API keys server-side)
+  api/                       ← Vercel serverless functions (production key injection)
+    notion.js                ← Proxies api.notion.com
+    gh-api.js                ← Proxies api.github.com
+    gh-contrib.js             ← Proxies github-contributions-api.jogruber.de
+    claude-api.js             ← Proxies api.anthropic.com
+  vercel.json                ← Rewrites /notion, /gh-api, /gh-contrib, /claude-api → api/*
+  vite.config.js            ← Dev-only proxy config (mirrors api/ behavior for `npm run dev`)
 scripts/
   email-pipeline.js         ← Google Apps Script (deploy to script.google.com)
 notion/
   schema.md                 ← DB schema reference
 plans/                      ← Phase plans (mostly outdated — see below)
 prompts/                    ← Claude prompts
-context.md                  ← Gitignored — Notion/Anthropic IDs for reference
+context.md                  ← Gitignored, untracked — Notion/Anthropic IDs for reference
 .env                        ← Gitignored — all API keys
 ```
+
+## Deployment
+
+- **Live URL:** https://your-app.vercel.app
+- **Vercel project:** `recruiting-os` (team `your-vercel-team`), root directory set to `app/`
+- **GitHub:** `your-org/recruiting-os` (private), Vercel auto-deploys on push to `main`
+- **Manual deploy:** `cd app && npx vercel --prod`
+- API keys live only as encrypted Vercel env vars (`NOTION_API_KEY`, `ANTHROPIC_API_KEY`) — never in the repo or the client bundle
+- Local dev (`npm run dev`) still uses the Vite proxy in `vite.config.js`; production uses the `api/*.js` serverless functions instead — keep both in sync if proxy behavior changes
+- Gotcha: Vercel's zero-config catch-all dynamic routes (`api/notion/[...path].js`) only match a single path segment and silently 404 on anything deeper — that's why the proxy functions are flat files (`api/notion.js`) with the sub-path passed as a `?path=` query param via `vercel.json` rewrites, not nested dynamic folders
 
 ---
 

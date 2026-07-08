@@ -11,7 +11,7 @@
 INPUTS                          NOTION HUB                    DASHBOARD
 ──────                          ──────────                    ─────────
 Gmail ──[Apps Script+Claude]──► Contacts DB ◄──────────────► React app
-Granola ──[manual paste]──────► Calls DB    ◄──────────────► localhost:3001
+Granola ──[manual paste]──────► Calls DB    ◄──────────────► your-app.vercel.app
 LeetCode ──[LeetNotion ext]───► LC Problems DB
 GitHub job boards ────────────► (localStorage buckets)
 ```
@@ -21,7 +21,8 @@ GitHub job boards ────────────► (localStorage buckets)
 ## What's Built ✅
 
 ### React + Vite Dashboard (`app/`)
-Run: `cd app && npm run dev` → http://localhost:3001
+**Live:** https://your-app.vercel.app — auto-deploys on push to `main` (GitHub: `your-org/recruiting-os`, private)
+Local dev: `cd app && npm run dev` → http://localhost:3001
 
 | Tab | What It Does |
 |---|---|
@@ -38,10 +39,9 @@ Run: `cd app && npm run dev` → http://localhost:3001
 - Calendar view by posting date
 - Filter bar: text search (company + role + location), free-text location input, quick chips (Remote, Bay Area, NYC, Seattle, Austin, Boston, Chicago, LA), clear all
 
-**Vite proxy** injects all API keys server-side — keys never reach the browser:
-- `/notion` → Notion API
-- `/gh-api` → GitHub API
-- `/claude-api` → Anthropic API
+**Key injection** — API keys never reach the browser:
+- Production: `app/api/*.js` Vercel serverless functions, `vercel.json` rewrites `/notion`, `/gh-api`, `/gh-contrib`, `/claude-api` → them; keys live as encrypted Vercel env vars
+- Local dev: `vite.config.js` dev-server proxy does the same job against `.env`
 
 ### Email Pipeline (`scripts/email-pipeline.js`)
 Google Apps Script — runs every 10 minutes via time trigger  
@@ -49,11 +49,16 @@ Gmail label `recruiting` → Claude Haiku classifies + extracts → Notion upser
 Cost: ~$0.001/email
 
 ### Notion Hub
-4 live databases — IDs in `.env` and `context.md` (both gitignored)
+4 live databases — IDs in `.env` and `context.md` (both gitignored, `context.md` untracked from git as of this deploy)
 - Contacts DB
 - Calls DB
 - Applications DB
 - LC Problems DB
+
+### Hosting (Vercel)
+- Project `recruiting-os`, root directory `app/`, connected to GitHub for auto-deploy
+- Manual redeploy: `cd app && npx vercel --prod`
+- Gotcha to remember: don't use nested `[...path].js` dynamic folders for proxy routes — Vercel's zero-config catch-all only matches a single path segment and 404s on deeper paths. Current setup uses flat `api/notion.js` etc. with the sub-path passed as `?path=` via rewrites.
 
 ---
 
@@ -127,9 +132,11 @@ Ordered by ROI for Fall 2026 recruiting (apps open in ~4 weeks):
 app/src/App.jsx          Main dashboard (tabs, all UI)
 app/src/github.js        GitHub README → job listing parser
 app/src/notion.js        Notion API client
-app/vite.config.js       Proxy config (API key injection)
+app/api/*.js             Vercel serverless proxies (production key injection)
+app/vercel.json          Rewrites → api/*.js, deploy config
+app/vite.config.js       Dev-server proxy config (local key injection)
 scripts/email-pipeline.js  Google Apps Script — deploy to script.google.com
 notion/schema.md         Notion DB schema reference
-context.md               GITIGNORED — Notion/Anthropic IDs
+context.md               GITIGNORED, untracked — Notion/Anthropic IDs
 .env                     GITIGNORED — all API keys
 ```
