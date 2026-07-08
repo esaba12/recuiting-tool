@@ -1,6 +1,7 @@
-const CONTACTS_DB = '6f941973-1fce-40c3-943c-4c908940e2a8'
-const CALLS_DB    = '8ddef121-1744-45d2-aa52-7699a727e9c0'
-const APPS_DB     = '49011c2e-8165-4373-a41b-f913b02d1052'
+const CONTACTS_DB     = '6f941973-1fce-40c3-943c-4c908940e2a8'
+const CALLS_DB        = '8ddef121-1744-45d2-aa52-7699a727e9c0'
+const APPS_DB         = '49011c2e-8165-4373-a41b-f913b02d1052'
+const INTERACTIONS_DB = '39753135-a476-819e-96b4-dc41ecab6364'
 
 async function queryDB(dbId) {
   const pages = []
@@ -31,6 +32,19 @@ function num(prop)  { return prop?.formula?.number ?? prop?.number ?? null }
 async function notionPost(path, body) {
   const res = await fetch(`/notion/v1${path}`, {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.message || `Notion ${res.status}`)
+  }
+  return res.json()
+}
+
+async function notionPatch(path, body) {
+  const res = await fetch(`/notion/v1${path}`, {
+    method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
@@ -102,20 +116,75 @@ export async function addApplication({ company, role, jdLink }) {
 
 export async function fetchContacts() {
   const pages = await queryDB(CONTACTS_DB)
-  return pages.map(p => ({
+  const contacts = pages.map(p => ({
     id:              p.id,
     name:            str(p.properties.Name),
     company:         str(p.properties.Company),
     role:            sel(p.properties.Role),
     email:           p.properties.Email?.email || '',
     linkedin:        url(p.properties.LinkedIn),
+    source:          sel(p.properties.Source),
     status:          sel(p.properties.Status) || '🟡 Cooling',
     urgency:         sel(p.properties.Urgency) || 'LOW',
     lastInteraction: date(p.properties['Last Interaction']),
     followUpDate:    date(p.properties['Follow-Up Date']),
     notes:           str(p.properties.Notes),
     whatTheyDid:     str(p.properties["What They've Done For Me"]),
+    referredById:    p.properties['Referred By']?.relation?.[0]?.id || null,
   }))
+  const byId = Object.fromEntries(contacts.map(c => [c.id, c]))
+  return contacts.map(c => ({ ...c, referredByName: c.referredById ? (byId[c.referredById]?.name || null) : null }))
+}
+
+// Patchable field -> Notion property builder. Only include keys you want to change.
+export async function updateContact(id, fields) {
+  const properties = {}
+  if ('name' in fields)      properties['Name']             = { title: [{ text: { content: fields.name || '' } }] }
+  if ('company' in fields)   properties['Company']          = { rich_text: [{ text: { content: fields.company || '' } }] }
+  if ('role' in fields)      properties['Role']             = fields.role ? { select: { name: fields.role } } : { select: null }
+  if ('email' in fields)     properties['Email']            = { email: fields.email || null }
+  if ('linkedin' in fields)  properties['LinkedIn']         = { url: fields.linkedin || null }
+  if ('source' in fields)    properties['Source']           = fields.source ? { select: { name: fields.source } } : { select: null }
+  if ('status' in fields)    properties['Status']           = fields.status ? { select: { name: fields.status } } : { select: null }
+  if ('urgency' in fields)   properties['Urgency']          = fields.urgency ? { select: { name: fields.urgency } } : { select: null }
+  if ('notes' in fields)     properties['Notes']            = { rich_text: [{ text: { content: fields.notes || '' } }] }
+  if ('whatTheyDid' in fields) properties["What They've Done For Me"] = { rich_text: [{ text: { content: fields.whatTheyDid || '' } }] }
+  if ('lastInteraction' in fields) properties['Last Interaction'] = { date: fields.lastInteraction ? { start: fields.lastInteraction } : null }
+  if ('followUpDate' in fields)    properties['Follow-Up Date']  = { date: fields.followUpDate ? { start: fields.followUpDate } : null }
+  if ('referredById' in fields)    properties['Referred By']     = { relation: fields.referredById ? [{ id: fields.referredById }] : [] }
+  return notionPatch(`/pages/${id}`, { properties })
+}
+
+export async function addInteraction({ contactId, contactName, type, direction, date: interactionDate, channelRef, summary, body }) {
+  const today = interactionDate || new Date().toISOString().split('T')[0]
+  const title = `${type} — ${contactName || '?'} — ${new Date(today).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}`
+  return notionPost('/pages', {
+    parent: { database_id: INTERACTIONS_DB },
+    properties: {
+      'Title':       { title: [{ text: { content: title } }] },
+      'Date':        { date: { start: today } },
+      ...(contactId ? { 'Contact': { relation: [{ id: contactId }] } } : {}),
+      'Type':        type      ? { select: { name: type } }      : undefined,
+      'Direction':   direction ? { select: { name: direction } } : undefined,
+      'Channel Ref': channelRef ? { rich_text: [{ text: { content: channelRef } }] } : undefined,
+      'Summary':     summary   ? { rich_text: [{ text: { content: summary } }] }   : undefined,
+      'Body':        body      ? { rich_text: [{ text: { content: body.slice(0, 2000) } }] } : undefined,
+    },
+  })
+}
+
+export async function fetchInteractions() {
+  const pages = await queryDB(INTERACTIONS_DB)
+  return pages.map(p => ({
+    id:         p.id,
+    contactId:  p.properties.Contact?.relation?.[0]?.id || null,
+    type:       sel(p.properties.Type),
+    direction:  sel(p.properties.Direction),
+    date:       date(p.properties.Date),
+    channelRef: str(p.properties['Channel Ref']),
+    summary:    str(p.properties.Summary),
+    body:       str(p.properties.Body),
+  })).sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
 }
 
 export async function fetchApplications() {

@@ -1,6 +1,12 @@
 import { useState, useEffect } from 'react'
-import { fetchContacts, fetchApplications, addApplication, addContact, addCallEntry, searchContactByName } from './notion.js'
+import { fetchContacts, fetchApplications, addApplication, addContact, addCallEntry, searchContactByName, fetchInteractions } from './notion.js'
 import { fetchGitHubProfile, fetchRepoJobs, parseGitHubInput, topLanguages, parseEvents, buildWeeks } from './github.js'
+import { STATUS_COLOR, URGENCY_COLOR, daysSince, daysUntil, fmt, Badge, EmptyState } from './shared.jsx'
+import ContactDetailModal from './components/ContactDetailModal.jsx'
+import ContactsTable from './components/ContactsTable.jsx'
+import LinkedInTab from './components/LinkedInTab.jsx'
+import QuickLogModal from './components/QuickLogModal.jsx'
+import NetworkGraphTab from './components/NetworkGraphTab.jsx'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -17,46 +23,11 @@ const STAGE_COLOR = {
   Rejected:       'bg-red-100 text-red-600',
 }
 
-const STATUS_COLOR = {
-  '🟢 Warm':    'bg-green-100 text-green-800',
-  '🟡 Cooling': 'bg-yellow-100 text-yellow-800',
-  '🔴 Cold':    'bg-red-100 text-red-700',
-  '✅ Closed':  'bg-gray-100 text-gray-500',
-  '⭐ Champion':'bg-orange-100 text-orange-800',
-}
-
-const URGENCY_COLOR = {
-  HIGH: 'bg-red-500 text-white',
-  MED:  'bg-amber-400 text-white',
-  LOW:  'bg-gray-100 text-gray-400',
-}
-
 const ACTIVE_STAGES = ['Wishlist','Applied','Phone Screen','Technical','Onsite']
 const INTERVIEW_STAGES = ['Phone Screen','Technical','Onsite']
 const TERMINAL_STAGES = ['Rejected','Accepted']
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function daysSince(d) {
-  if (!d) return null
-  return Math.floor((Date.now() - new Date(d)) / 86400000)
-}
-
-function daysUntil(d) {
-  if (!d) return null
-  return Math.floor((new Date(d) - Date.now()) / 86400000)
-}
-
-function fmt(d) {
-  if (!d) return '—'
-  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-}
-
 // ── Micro-components ──────────────────────────────────────────────────────────
-
-function Badge({ label, color = 'bg-gray-100 text-gray-600' }) {
-  return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${color}`}>{label}</span>
-}
 
 function KPI({ label, value, sub, accent = false }) {
   return (
@@ -66,10 +37,6 @@ function KPI({ label, value, sub, accent = false }) {
       {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
     </div>
   )
-}
-
-function EmptyState({ msg }) {
-  return <div className="text-center py-20 text-gray-400 text-sm">{msg}</div>
 }
 
 // ── Overview Tab ──────────────────────────────────────────────────────────────
@@ -193,9 +160,12 @@ function OverviewTab({ contacts, apps }) {
 
 // ── Network Tab ───────────────────────────────────────────────────────────────
 
-function NetworkTab({ contacts }) {
-  const [filter, setFilter] = useState('ALL')
-  const [search, setSearch] = useState('')
+function NetworkTab({ contacts, interactions, onRefresh }) {
+  const [filter, setFilter]   = useState('ALL')
+  const [search, setSearch]   = useState('')
+  const [view, setView]       = useState('table') // 'table' | 'cards'
+  const [editing, setEditing] = useState(null)   // contact object | 'new' | null
+  const [quickLog, setQuickLog] = useState(false)
 
   const filtered = contacts
     .filter(c => {
@@ -228,18 +198,39 @@ function NetworkTab({ contacts }) {
         ))}
         <input value={search} onChange={e => setSearch(e.target.value)}
           placeholder="Search..."
-          className="ml-auto px-3 py-1 border border-gray-200 rounded-full text-xs focus:outline-none focus:border-blue-400 w-44" />
+          className="px-3 py-1 border border-gray-200 rounded-full text-xs focus:outline-none focus:border-blue-400 w-44" />
+        <div className="ml-auto flex items-center gap-2">
+          <div className="flex border border-gray-200 rounded-full overflow-hidden text-xs font-medium">
+            {['table','cards'].map(v => (
+              <button key={v} onClick={() => setView(v)}
+                className={`px-3 py-1 capitalize transition-colors ${view === v ? 'bg-gray-900 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>
+                {v}
+              </button>
+            ))}
+          </div>
+          <button onClick={() => setQuickLog(true)}
+            className="px-3 py-1 bg-white border border-gray-200 rounded-full text-xs font-medium text-gray-600 hover:border-blue-300">
+            + Log
+          </button>
+          <button onClick={() => setEditing('new')}
+            className="px-3 py-1 bg-blue-600 text-white rounded-full text-xs font-medium hover:bg-blue-700">
+            + Contact
+          </button>
+        </div>
       </div>
 
       {filtered.length === 0
         ? <EmptyState msg={contacts.length === 0 ? 'No contacts yet — the email pipeline will add them as recruiting emails come in.' : 'No contacts match this filter.'} />
+        : view === 'table'
+        ? <ContactsTable contacts={filtered} onEdit={c => setEditing(c)} />
         : (
           <div className="space-y-2">
             {filtered.map(c => {
               const overdue = c.followUpDate && daysUntil(c.followUpDate) <= 0
               const lastSeen = daysSince(c.lastInteraction)
               return (
-                <div key={c.id} className={`bg-white rounded-xl px-4 py-3 shadow-sm border transition-shadow hover:shadow-md ${overdue ? 'border-red-200' : 'border-gray-100'}`}>
+                <div key={c.id} onClick={() => setEditing(c)}
+                  className={`bg-white rounded-xl px-4 py-3 shadow-sm border transition-shadow hover:shadow-md cursor-pointer ${overdue ? 'border-red-200' : 'border-gray-100'}`}>
                   <div className="flex items-start gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -250,11 +241,12 @@ function NetworkTab({ contacts }) {
                       <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                         <Badge label={c.status} color={STATUS_COLOR[c.status]} />
                         {c.urgency && c.urgency !== 'LOW' && <Badge label={c.urgency} color={URGENCY_COLOR[c.urgency]} />}
+                        {c.referredByName && <Badge label={`↩ ${c.referredByName}`} color="bg-indigo-50 text-indigo-600" />}
                         {c.email && (
-                          <a href={`mailto:${c.email}`} className="text-xs text-blue-500 hover:underline">{c.email}</a>
+                          <a href={`mailto:${c.email}`} onClick={e => e.stopPropagation()} className="text-xs text-blue-500 hover:underline">{c.email}</a>
                         )}
                         {c.linkedin && (
-                          <a href={c.linkedin} target="_blank" rel="noreferrer" className="text-xs text-blue-500 hover:underline">LinkedIn ↗</a>
+                          <a href={c.linkedin} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-xs text-blue-500 hover:underline">LinkedIn ↗</a>
                         )}
                       </div>
                       {c.whatTheyDid && (
@@ -282,6 +274,24 @@ function NetworkTab({ contacts }) {
             })}
           </div>
         )}
+
+      {editing && (
+        <ContactDetailModal
+          contact={editing === 'new' ? null : editing}
+          contacts={contacts}
+          interactions={interactions}
+          onClose={() => setEditing(null)}
+          onSaved={() => { setEditing(null); onRefresh() }}
+        />
+      )}
+
+      {quickLog && (
+        <QuickLogModal
+          contacts={contacts}
+          onClose={() => setQuickLog(false)}
+          onSaved={() => { setQuickLog(false); onRefresh() }}
+        />
+      )}
     </div>
   )
 }
@@ -1602,6 +1612,7 @@ export default function App() {
   const [tab, setTab]           = useState('overview')
   const [contacts, setContacts] = useState([])
   const [apps, setApps]         = useState([])
+  const [interactions, setInteractions] = useState([])
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState(null)
   const [lastLoaded, setLastLoaded] = useState(null)
@@ -1611,8 +1622,8 @@ export default function App() {
   async function load() {
     setLoading(true); setError(null)
     try {
-      const [c, a] = await Promise.all([fetchContacts(), fetchApplications()])
-      setContacts(c); setApps(a)
+      const [c, a, i] = await Promise.all([fetchContacts(), fetchApplications(), fetchInteractions()])
+      setContacts(c); setApps(a); setInteractions(i)
       setLastLoaded(new Date().toLocaleTimeString())
     } catch (e) { setError(e.message) }
     finally { setLoading(false) }
@@ -1631,9 +1642,11 @@ export default function App() {
   const tabs = [
     { id: 'overview', label: 'Overview' },
     { id: 'network',  label: `Network (${contacts.length})` },
+    { id: 'graph',    label: 'Graph' },
     { id: 'pipeline', label: `Pipeline (${activeApps.length})` },
     { id: 'actions',  label: actionCount > 0 ? `Actions 🔴 ${actionCount}` : 'Actions' },
     { id: 'calls',    label: 'Calls' },
+    { id: 'linkedin', label: 'LinkedIn' },
     { id: 'github',   label: 'Job Boards' },
   ]
 
@@ -1674,10 +1687,12 @@ export default function App() {
 
         {loading && <EmptyState msg="Loading from Notion..." />}
         {!loading && tab === 'overview' && <OverviewTab contacts={contacts} apps={apps} />}
-        {!loading && tab === 'network'  && <NetworkTab contacts={contacts} />}
+        {!loading && tab === 'network'  && <NetworkTab contacts={contacts} interactions={interactions} onRefresh={load} />}
+        {!loading && tab === 'graph'    && <NetworkGraphTab contacts={contacts} />}
         {!loading && tab === 'pipeline' && <PipelineTab apps={apps} />}
         {!loading && tab === 'actions'  && <ActionsTab contacts={contacts} apps={apps} />}
         {tab === 'calls'    && <CallsTab />}
+        {tab === 'linkedin' && <LinkedInTab onSaved={load} />}
         {tab === 'github'   && <GitHubTab />}
       </div>
     </div>

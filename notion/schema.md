@@ -1,6 +1,6 @@
 # Notion Database Schema Reference
 
-Quick reference for all 4 databases. Full setup instructions in `plans/phase-1-notion-foundation.md`.
+Quick reference for all 5 databases. Full setup instructions in `plans/phase-1-notion-foundation.md`.
 
 ---
 
@@ -21,8 +21,26 @@ Quick reference for all 4 databases. Full setup instructions in `plans/phase-1-n
 | Urgency | Select | HIGH / MED / LOW |
 | Linked Calls | Relation | → Calls DB |
 | Linked Applications | Relation | → Applications DB |
+| Referred By | Relation | → Contacts DB (self) — who introduced/referred you to this contact |
 | Notes | Text | |
 | Exa Enriched | Checkbox | Checked after Exa enrichment runs |
+
+---
+
+## Interactions DB
+
+Universal touchpoint ledger — every email, LinkedIn message, call, or meeting gets one row here, regardless of whether it also has a richer artifact elsewhere (e.g. a Calls DB entry). `Last Interaction`/`Follow-Up Date` on Contacts stay as quick-glance fields; this DB is the detailed history.
+
+| Property | Type | Options / Notes |
+|---|---|---|
+| Title | Title | Format: "[Type] — [Contact] — [Date]" |
+| Contact | Relation | → Contacts DB |
+| Type | Select | Email / LinkedIn / Call / Meeting / Other |
+| Direction | Select | Inbound / Outbound / N/A |
+| Date | Date | |
+| Channel Ref | Text | Gmail thread id, Calls DB page id, etc. |
+| Summary | Text | One-liner (Claude-extracted or manual) |
+| Body | Text | Raw pasted/extracted content, truncated |
 
 ---
 

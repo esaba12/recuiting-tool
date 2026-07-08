@@ -14,9 +14,10 @@
 // COST: ~$0.001/email with Haiku. 300 emails/month = $0.30 from your Anthropic credits.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CONTACTS_DB = '6f941973-1fce-40c3-943c-4c908940e2a8'
-const APPS_DB     = '49011c2e-8165-4373-a41b-f913b02d1052'
-const DONE_LABEL  = 'recruiting-done'
+const CONTACTS_DB     = '6f941973-1fce-40c3-943c-4c908940e2a8'
+const APPS_DB         = '49011c2e-8165-4373-a41b-f913b02d1052'
+const INTERACTIONS_DB = '39753135-a476-819e-96b4-dc41ecab6364'
+const DONE_LABEL      = 'recruiting-done' // visual marker in Gmail only — no longer used to gate processing, since threads can grow replies after being marked done
 
 function getKeys() {
   const p = PropertiesService.getScriptProperties()
@@ -32,38 +33,47 @@ function getKeys() {
 
 function processRecruitingEmails() {
   const keys    = getKeys()
-  const threads = GmailApp.search('label:recruiting -label:recruiting-done', 0, 25)
+  const props   = PropertiesService.getScriptProperties()
+  const threads = GmailApp.search('label:recruiting', 0, 25)
+  const myEmail = Session.getActiveUser().getEmail().toLowerCase()
 
   if (!threads.length) {
-    console.log('No new recruiting emails.')
+    console.log('No recruiting threads found.')
     return
   }
 
   const doneLabel = getOrCreateLabel(DONE_LABEL)
-  console.log(`Found ${threads.length} thread(s) to process`)
+  console.log(`Scanning ${threads.length} thread(s)`)
 
   threads.forEach(thread => {
+    const threadId = thread.getId()
+    const seenKey  = `msgcount_${threadId}`
     try {
       const messages = thread.getMessages()
+      const seen     = Number(props.getProperty(seenKey) || 0)
+
+      if (messages.length <= seen) return // nothing new since last run
+
       const msg      = messages[messages.length - 1]
       const subject  = msg.getSubject()
       const from     = msg.getFrom()
       const body     = msg.getPlainBody().slice(0, 4000)
       const date     = Utilities.formatDate(msg.getDate(), 'UTC', 'yyyy-MM-dd')
 
-      console.log(`→ "${subject}" from ${from}`)
+      console.log(`→ "${subject}" from ${from} (${messages.length - seen} new message(s))`)
 
       const data = extractWithClaude(keys.anthropic, subject, from, body, date)
 
       if (!data || data.type === 'UNRELATED') {
         console.log('  Skipped — UNRELATED')
         thread.addLabel(doneLabel)
+        props.setProperty(seenKey, String(messages.length))
         return
       }
 
       console.log(`  Type: ${data.type} | ${data.contact_name} @ ${data.company}`)
 
-      upsertContact(keys.notion, data)
+      const contactId = upsertContact(keys.notion, data)
 
       if (['INTERVIEW_INVITE', 'OFFER', 'REJECTION'].includes(data.type)) {
         upsertApplication(keys.notion, data)
@@ -73,12 +83,21 @@ function processRecruitingEmails() {
         createCalendarEvent(data)
       }
 
+      // Log every message new since the last run as its own Interactions row (no LLM call —
+      // classification above already ran once against the newest message).
+      // Simplifying assumption: the whole thread maps to the one contact resolved above,
+      // even if a second person is CC'd on some messages.
+      for (let i = seen; i < messages.length; i++) {
+        logMessageInteraction(keys.notion, messages[i], contactId, threadId, myEmail)
+      }
+
       thread.addLabel(doneLabel)
+      props.setProperty(seenKey, String(messages.length))
       console.log('  ✓ Written to Notion')
 
     } catch (e) {
       console.error(`  ✗ ${e.message}`)
-      // Don't mark done — will retry next run
+      // Don't update seenKey — will retry next run
     }
   })
 }
@@ -189,8 +208,9 @@ function upsertContact(notionKey, data) {
   if (existingId) {
     notionReq(notionKey, 'patch', `/pages/${existingId}`, { properties: sharedProps })
     console.log(`  Contact updated: ${existingId}`)
+    return existingId
   } else {
-    notionReq(notionKey, 'post', '/pages', {
+    const created = notionReq(notionKey, 'post', '/pages', {
       parent:     { database_id: CONTACTS_DB },
       properties: {
         'Name': { title: [{ text: { content: data.contact_name || 'Unknown' } }] },
@@ -198,7 +218,30 @@ function upsertContact(notionKey, data) {
       },
     })
     console.log(`  Contact created: ${data.contact_name}`)
+    return created.id
   }
+}
+
+function logMessageInteraction(notionKey, message, contactId, threadId, myEmail) {
+  const fromHeader = message.getFrom() || ''
+  const addrMatch  = fromHeader.match(/<(.+)>/)
+  const fromAddr   = (addrMatch ? addrMatch[1] : fromHeader).toLowerCase()
+  const direction  = fromAddr === myEmail ? 'Outbound' : 'Inbound'
+  const date       = Utilities.formatDate(message.getDate(), 'UTC', 'yyyy-MM-dd')
+  const title      = `Email — ${direction} — ${date}`
+
+  notionReq(notionKey, 'post', '/pages', {
+    parent:     { database_id: INTERACTIONS_DB },
+    properties: {
+      'Title':       { title: [{ text: { content: title } }] },
+      'Date':        { date: { start: date } },
+      ...(contactId ? { 'Contact': { relation: [{ id: contactId }] } } : {}),
+      'Type':        { select: { name: 'Email' } },
+      'Direction':   { select: { name: direction } },
+      'Channel Ref': { rich_text: [{ text: { content: threadId } }] },
+      'Summary':     { rich_text: [{ text: { content: message.getPlainBody().slice(0, 300) } }] },
+    },
+  })
 }
 
 function upsertApplication(notionKey, data) {

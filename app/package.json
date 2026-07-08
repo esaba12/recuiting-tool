@@ -8,8 +8,10 @@
     "build": "vite build"
   },
   "dependencies": {
+    "@tanstack/react-table": "^8.21.3",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "react-force-graph-2d": "^1.29.1"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",
