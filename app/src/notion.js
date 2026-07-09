@@ -102,16 +102,30 @@ export async function addCallEntry({ contactId, contactName, company, summary, k
   })
 }
 
-export async function addApplication({ company, role, jdLink }) {
+export async function addApplication({ company, role, jdLink, location, sourceRepo, datePosted }) {
   return notionPost('/pages', {
     parent: { database_id: APPS_DB },
     properties: {
       'Company':     { title: [{ text: { content: company } }] },
-      'Role':        role    ? { rich_text: [{ text: { content: role } }] }    : undefined,
-      'JD Link':     jdLink  ? { url: jdLink }                                  : undefined,
+      'Role':        role       ? { rich_text: [{ text: { content: role } }] }       : undefined,
+      'JD Link':     jdLink     ? { url: jdLink }                                     : undefined,
+      'Location':    location   ? { rich_text: [{ text: { content: location } }] }   : undefined,
+      'Source Repo': sourceRepo ? { rich_text: [{ text: { content: sourceRepo } }] } : undefined,
+      'Notes':       datePosted ? { rich_text: [{ text: { content: `Posted ${datePosted}` } }] } : undefined,
       'Stage':       { select: { name: 'Wishlist' } },
+      'Triage':      { select: { name: 'Needs Review' } },
     },
   })
+}
+
+// Only patches Triage (+ cascading Stage/Applied Date effects) — used by the Job Boards review flow.
+export async function updateApplicationTriage(id, triage, currentStage) {
+  const properties = { 'Triage': { select: { name: triage } } }
+  if (triage === 'Applied' && (!currentStage || currentStage === 'Wishlist')) {
+    properties['Stage'] = { select: { name: 'Applied' } }
+    properties['Applied Date'] = { date: { start: new Date().toISOString().split('T')[0] } }
+  }
+  return notionPatch(`/pages/${id}`, { properties })
 }
 
 export async function fetchContacts() {
@@ -194,10 +208,18 @@ export async function fetchApplications() {
     company:     str(p.properties.Company),
     role:        str(p.properties.Role),
     stage:       sel(p.properties.Stage) || 'Applied',
+    triage:      sel(p.properties.Triage) || 'Needs Review',
+    location:    str(p.properties.Location),
+    sourceRepo:  str(p.properties['Source Repo']),
     appliedDate: date(p.properties['Applied Date']),
     lastActivity: date(p.properties['Last Activity']),
     daysInStage: num(p.properties['Days in Stage']),
     jdLink:      url(p.properties['JD Link']),
     notes:       str(p.properties.Notes),
+    createdTime: p.created_time,
   }))
+}
+
+export async function archiveApplication(id) {
+  return notionPatch(`/pages/${id}`, { archived: true })
 }

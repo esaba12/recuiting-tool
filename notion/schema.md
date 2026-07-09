@@ -69,6 +69,9 @@ Universal touchpoint ledger — every email, LinkedIn message, call, or meeting 
 | Company | Title | |
 | Role | Text | |
 | Stage | Select | Wishlist / Applied / Phone Screen / Technical / Onsite / Offer / Rejected / Accepted |
+| Triage | Select | Needs Review / Applying / Maybe / Applied / Pass — set by the Job Boards auto-import, sorted by the user. Rows with Triage=Needs Review or Pass (still at Stage=Wishlist) are excluded from Overview/Pipeline/Actions "active" stats. |
+| Location | Text | From the job board listing |
+| Source Repo | Text | Which GitHub job board README this row was auto-imported from |
 | Applied Date | Date | |
 | Last Activity | Date | Auto-updated by email pipeline |
 | Recruiter Contact | Relation | → Contacts DB |

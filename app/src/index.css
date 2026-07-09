@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+/* Registered now for future-proofing — not used until a dark-mode pass is explicitly requested. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-heading: "Space Grotesk", sans-serif;
+  --font-body: "Public Sans", sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+
+  /* Warm off-white page canvas — replaces flat bg-gray-50 */
+  --color-canvas: #fbf9f5;
+
+  /* Charcoal scale — dominant color. Sidebar bg is ink-900, sidebar text is ink-50. */
+  --color-ink-50: #f6f6f7;
+  --color-ink-100: #e9e9eb;
+  --color-ink-200: #d3d3d7;
+  --color-ink-300: #b0b0b7;
+  --color-ink-400: #86868f;
+  --color-ink-500: #64646d;
+  --color-ink-600: #4a4a52;
+  --color-ink-700: #37373d;
+  --color-ink-800: #24242a;
+  --color-ink-900: #16171d;
+
+  /* Warm amber/orange — the one sharp accent. Used for all primary actions/active states/links/focus. */
+  --color-accent-50: #fef3e7;
+  --color-accent-100: #fde3c4;
+  --color-accent-200: #fbc888;
+  --color-accent-300: #f7ad63;
+  --color-accent-400: #f5a13f;
+  --color-accent-500: #f2994a;
+  --color-accent-600: #e17f26;
+  --color-accent-700: #c7761f;
+  --color-accent-800: #9c5b18;
+  --color-accent-900: #7a4712;
+
+  /* Status tokens — coordinated replacements for stock Tailwind green/yellow/red */
+  --color-success-50: #eef7ee;
+  --color-success-100: #d7eed8;
+  --color-success-200: #b7e0ba;
+  --color-success-500: #3c9a46;
+  --color-success-600: #2f8038;
+  --color-success-700: #256730;
+  --color-success-800: #1c4f24;
+  --color-success-900: #143a1a;
+
+  --color-warning-50: #fdf6e3;
+  --color-warning-100: #fae8b8;
+  --color-warning-200: #f5d98a;
+  --color-warning-400: #e3b559;
+  --color-warning-500: #d9a02b;
+  --color-warning-600: #b9841f;
+  --color-warning-700: #8f6518;
+  --color-warning-800: #6b4b12;
+
+  --color-danger-50: #fbeaea;
+  --color-danger-100: #f5cccc;
+  --color-danger-200: #ecacac;
+  --color-danger-400: #d97070;
+  --color-danger-500: #c94a4a;
+  --color-danger-600: #ad3838;
+  --color-danger-700: #8a2c2c;
+}
+
+body {
+  font-family: var(--font-body);
+}
+
+h1, h2, h3 {
+  font-family: var(--font-heading);
+}

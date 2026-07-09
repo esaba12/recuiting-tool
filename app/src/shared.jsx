@@ -1,18 +1,37 @@
 // ── Shared constants + micro-components used across tabs ──────────────────────
 
+export { default as Badge } from './components/ui/Badge.jsx'
+export { default as EmptyState } from './components/ui/EmptyState.jsx'
+
 export const STATUS_COLOR = {
-  '🟢 Warm':    'bg-green-100 text-green-800',
-  '🟡 Cooling': 'bg-yellow-100 text-yellow-800',
-  '🔴 Cold':    'bg-red-100 text-red-700',
-  '✅ Closed':  'bg-gray-100 text-gray-500',
+  '🟢 Warm':    'bg-success-100 text-success-800',
+  '🟡 Cooling': 'bg-warning-100 text-warning-800',
+  '🔴 Cold':    'bg-danger-100 text-danger-700',
+  '✅ Closed':  'bg-ink-100 text-ink-500',
   '⭐ Champion':'bg-orange-100 text-orange-800',
 }
 
 export const URGENCY_COLOR = {
-  HIGH: 'bg-red-500 text-white',
-  MED:  'bg-amber-400 text-white',
-  LOW:  'bg-gray-100 text-gray-400',
+  HIGH: 'bg-danger-500 text-white',
+  MED:  'bg-warning-400 text-white',
+  LOW:  'bg-ink-100 text-ink-400',
 }
+
+export const STAGE_ORDER = ['Wishlist','Applied','Phone Screen','Technical','Onsite','Offer','Accepted','Rejected']
+
+export const STAGE_COLOR = {
+  Wishlist:       'bg-ink-100 text-ink-600',
+  Applied:        'bg-accent-100 text-accent-700',
+  'Phone Screen': 'bg-warning-100 text-warning-800',
+  Technical:      'bg-orange-100 text-orange-800',
+  Onsite:         'bg-purple-100 text-purple-800',
+  Offer:          'bg-success-100 text-success-800',
+  Accepted:       'bg-success-200 text-success-900 font-semibold',
+  Rejected:       'bg-danger-100 text-danger-600',
+}
+
+export const INTERVIEW_STAGES = ['Phone Screen','Technical','Onsite']
+export const TERMINAL_STAGES = ['Rejected','Accepted']
 
 export const ROLE_OPTIONS = ['SWE','PM','Recruiter','Alumni','Referral','Other']
 export const SOURCE_OPTIONS = ['Coffee chat','Email','Event','Referral','LinkedIn DM']
@@ -34,10 +53,27 @@ export function fmt(d) {
   return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-export function Badge({ label, color = 'bg-gray-100 text-gray-600' }) {
-  return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${color}`}>{label}</span>
+// A bulk-imported job board listing that hasn't been triaged yet (still sitting untouched
+// in the review queue), or one the user explicitly passed on — excluded from
+// Overview/Pipeline/Actions "active" stats so a big board import doesn't drown out real activity.
+export function isUntriaged(a) {
+  return (a.triage === 'Needs Review' && a.stage === 'Wishlist') || a.triage === 'Pass'
 }
 
-export function EmptyState({ msg }) {
-  return <div className="text-center py-20 text-gray-400 text-sm">{msg}</div>
+// Groups applications that normalize to the same Company+Role (trim + lowercase) —
+// catches exact re-imports (e.g. the same board pulled twice) but not fuzzily-worded
+// duplicates across sources (different phrasing of the same role won't match).
+// Each group's entries are sorted oldest-first.
+export function findDuplicateGroups(apps) {
+  const groups = {}
+  for (const a of apps) {
+    const key = `${(a.company || '').trim().toLowerCase()}::${(a.role || '').trim().toLowerCase()}`
+    if (!key.replace(/:/g, '')) continue
+    ;(groups[key] ||= []).push(a)
+  }
+  return Object.values(groups)
+    .filter(g => g.length > 1)
+    .map(g => g.slice().sort((a, b) => new Date(a.createdTime || 0) - new Date(b.createdTime || 0)))
+    .sort((a, b) => b.length - a.length)
 }
+

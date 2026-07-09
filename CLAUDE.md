@@ -30,29 +30,48 @@ A zero-touch recruiting OS for a student's SWE/PM internship search. Calls, emai
 ```
 app/                        ← React + Vite dashboard (PRIMARY) — Vercel root directory
   src/
-    App.jsx                 ← Main app, tab shells + state (Overview/Network/Pipeline/Actions/Calls/GitHub)
-    shared.jsx               ← Shared consts (STATUS_COLOR, ROLE_OPTIONS, etc.) + micro-components (Badge, EmptyState) used across App.jsx and components/
-    components/               ← Network-tracker components: ContactDetailModal, ContactsTable, LinkedInTab, QuickLogModal, NetworkGraphTab
-    github.js               ← GitHub job board parser
-    notion.js               ← Notion API client
+    App.jsx                 ← Root App() (state/data-loading/routing) + NetworkTab (Table/Cards/Graph view switch)
+    index.css                ← Tailwind v4 entry (`@import "tailwindcss"`) + @theme design tokens (fonts/colors)
+    shared.jsx               ← Business-logic consts (STATUS_COLOR, STAGE_COLOR, isUntriaged, findDuplicateGroups, etc.) + re-exports Badge/EmptyState from components/ui/
+    lib/
+      cn.js                   ← clsx + tailwind-merge className helper used by every ui/ primitive
+      icons.js                ← emoji → lucide-react icon lookup maps (STATUS_ICON, BUCKET_ICON, NAV_ICON, etc.)
+    components/
+      ui/                      ← Hand-rolled shadcn-shaped primitives: Button, Modal (framer-motion transition), Badge, Card, Tabs, Input, Select, EmptyState
+      layout/                  ← Sidebar.jsx (dark nav rail + mobile bottom bar), AppShell.jsx (shell + tab-switch motion)
+      jobBoards/               ← GitHubTab, RepoJobsView, JobCard, JobDetailModal, RepoStats, PreferencesPanel, CalendarView, UserProfileView, ContributionGrid, helpers.js
+      OverviewTab.jsx, PipelineTab.jsx (+DuplicatesPanel), ActionsTab.jsx
+      ContactDetailModal.jsx, ContactsTable.jsx, NetworkGraphTab.jsx
+      LogInteractionModal.jsx  ← Unified Call/LinkedIn/Meeting/Email/Other logging (see Networking Tracker below)
+    github.js                ← GitHub job board parser
+    notion.js                ← Notion API client
   api/                       ← Vercel serverless functions (production key injection)
     notion.js                ← Proxies api.notion.com
     gh-api.js                ← Proxies api.github.com
     gh-contrib.js             ← Proxies github-contributions-api.jogruber.de
     claude-api.js             ← Proxies api.anthropic.com
   vercel.json                ← Rewrites /notion, /gh-api, /gh-contrib, /claude-api → api/*
-  vite.config.js            ← Dev-only proxy config (mirrors api/ behavior for `npm run dev`)
+  vite.config.js            ← Dev proxy config + `@tailwindcss/vite` plugin
 scripts/
   email-pipeline.js         ← Google Apps Script (deploy to script.google.com)
 notion/
   schema.md                 ← DB schema reference
   setup.js / patch-dbs.js    ← One-off scripts that created/patched the original 4 DBs
   add-interactions-db.js     ← One-off script that created the Interactions DB + Contacts.Referred By self-relation
+  add-triage-fields.js       ← One-off script that added Triage/Location/Source Repo to Applications DB
 plans/                      ← Phase plans (mostly outdated — see below)
 prompts/                    ← Claude prompts
 context.md                  ← Gitignored, untracked — Notion/Anthropic IDs for reference
 .env                        ← Gitignored — all API keys
 ```
+
+## Design System (shipped July 2026)
+
+Tailwind converted from a CDN script to a real build (Tailwind v4 + `@tailwindcss/vite` plugin — no `tailwind.config.js` needed, theme lives in `app/src/index.css`'s `@theme` block). One dominant color (`ink`, a warm charcoal scale — sidebar bg/text) + one sharp accent (`accent`, warm amber/orange — every primary button/active-state/link/focus-ring) replace the old flat `blue-600`/`gray-50` look; `success`/`warning`/`danger` tokens replace stock Tailwind green/yellow/red for status badges. Fonts: **Space Grotesk** (headings, applied globally to h1/h2/h3 via CSS, no per-component class needed), **Public Sans** (body), **IBM Plex Mono** (not yet used anywhere specific — reserved for dense data if needed later). `darkMode: 'class'` custom-variant is registered but unused — light-only for now.
+
+Layout is a persistent dark sidebar (`components/layout/Sidebar.jsx`) + full-width content area (`components/layout/AppShell.jsx`), collapsing to a bottom tab bar on mobile. `lucide-react` replaced emoji-as-icon usage everywhere except inside Notion select-option data values themselves (`STATUS_COLOR` keys like `'🟢 Warm'` still carry the emoji since that's the literal string written to/read from Notion — icons are looked up separately via `lib/icons.js`'s `statusIconFor()`, not derived from stripping the emoji out of the data). `framer-motion` powers exactly 3 moments: modal open/close (`ui/Modal.jsx`), tab-switch fade (`AppShell.jsx`), and nothing else — deliberately not scattered across hover states.
+
+`App.jsx` was decomposed from ~1836 lines (monolithic, every tab inline) down to ~250 lines (root state/routing only) — every tab is now its own file under `components/`.
 
 ## Deployment
 
@@ -69,15 +88,18 @@ context.md                  ← Gitignored, untracked — Notion/Anthropic IDs f
 
 **Dev server:** `cd app && npm run dev` → http://localhost:3001
 
-### Tabs
-- **Overview** — Notion contacts needing follow-up, application stats
-- **Network** — Contact CRM from Contacts DB. Defaults to a filterable/sortable table view (`ContactsTable.jsx`, `@tanstack/react-table`), toggle to card view. Add/edit contacts via `ContactDetailModal.jsx` (also sets Status, Urgency, Referred By, Follow-Up Date — first in-app way to edit a contact). "+ Log" opens `QuickLogModal.jsx` for logging a call/meeting with no rich transcript. Every contact shows an expandable interaction History panel from the Interactions DB.
-- **Graph** — `NetworkGraphTab.jsx` (`react-force-graph-2d`): force-directed graph of contacts (colored by Status) + companies (derived from the Company field), with "Referred By" and "works at" edges. Click a contact node for details.
-- **Pipeline** — Application tracker from Applications DB, stage funnel
-- **Actions** — (planned) outreach queue
-- **Calls** — Paste Granola summary → Claude extracts → saves to Notion Calls DB
-- **LinkedIn** — `LinkedInTab.jsx`: paste a LinkedIn conversation → Claude extracts contact + summary → logs to Interactions DB. Manual by design — no scraping/automation tooling (real LinkedIn account-ban risk for automated message capture).
-- **Job Boards** — GitHub job board parser (paste repo URL → parse README tables)
+### Tabs (5 top-level, down from 8 — see Networking Tracker below)
+- **Overview** — Notion contacts needing follow-up, application stats, amber "N jobs need review" nudge, staggered KPI-card reveal on mount
+- **Network** — Contact CRM from Contacts DB. Three view modes via a segmented control: **Table** (`ContactsTable.jsx`, `@tanstack/react-table`, default), **Cards**, and **Graph** (`NetworkGraphTab.jsx`, `react-force-graph-2d` — force-directed graph of contacts colored by Status + companies derived from the Company field, "Referred By" edges). Add/edit contacts via `ContactDetailModal.jsx` (Status, Urgency, Referred By, Follow-Up Date, plus a "+ Log" affordance that opens `LogInteractionModal.jsx` pre-filled with that contact). Top-level "+ Log Interaction" button opens the same modal unfilled. Every contact shows an expandable interaction History panel from the Interactions DB.
+- **Pipeline** — Application tracker from Applications DB, stage funnel, `DuplicatesPanel` (see below)
+- **Actions** — Overdue follow-ups, stale applications, high-urgency contacts
+- **Job Boards** — GitHub job board parser (paste repo URL → parse README tables), auto-import, triage buckets, calendar/stats views
+
+### Networking Tracker — unified logging (Stage 7 consolidation, July 2026)
+What used to be 3 separate top-level tabs (Graph, LinkedIn, Calls) plus a Quick Log modal are now one place: **Network**. `LogInteractionModal.jsx` replaced `LinkedInTab.jsx` + `QuickLogModal.jsx` + the old `CallsTab` (all deleted) with a single modal and a channel selector — **Call / LinkedIn / Meeting / Email / Other**:
+- **Call** and **LinkedIn**: paste-box + "Extract with Claude" (same extraction prompts as the old separate tabs). Call additionally shows Key Insights/My Commitments/Follow-Up Draft fields and writes to **both** the Calls DB (`addCallEntry`) and the Interactions DB — the original `CallsTab` only wrote Calls DB and never logged to Interactions, which was an inconsistency with the Interactions DB's own documented purpose ("every call... gets one row here"); the unified modal fixes that gap.
+- **Meeting / Email / Other**: no transcript step, just contact/date/duration/notes → Interactions DB only.
+- LinkedIn logging remains deliberately manual — no scraping/automation tooling (real LinkedIn account-ban risk for automated message capture).
 
 ### Job Boards Tab (most-developed feature)
 - Input: GitHub repo URL (e.g., `github.com/speedyapply/2027-SWE-College-Jobs`) or username
@@ -91,7 +113,7 @@ context.md                  ← Gitignored, untracked — Notion/Anthropic IDs f
 - Stats bar: new this week, remote count, top locations, multi-role companies
 
 ### Duplicate tracker (Pipeline tab)
-`DuplicatesPanel` in `App.jsx` groups Applications by normalized (trim+lowercase) Company+Role via `findDuplicateGroups()` in `shared.jsx`, shows counts + a reviewable list, and an explicit "Archive N duplicates" button (native `confirm()` gate, keeps the oldest row per group, archives the rest via `archiveApplication()`). Only catches exact-text duplicates, not fuzzily-worded ones across sources.
+`DuplicatesPanel` in `components/PipelineTab.jsx` groups Applications by normalized (trim+lowercase) Company+Role via `findDuplicateGroups()` in `shared.jsx`, shows counts + a reviewable list, and an explicit "Archive N duplicates" button (native `confirm()` gate, keeps the oldest row per group, archives the rest via `archiveApplication()`). Only catches exact-text duplicates, not fuzzily-worded ones across sources.
 
 ### Vite Proxy (all keys injected server-side, never in browser bundle)
 ```
@@ -111,7 +133,7 @@ context.md                  ← Gitignored, untracked — Notion/Anthropic IDs f
 | Calls | `8ddef121-1744-45d2-aa52-7699a727e9c0` | Call notes, linked to contact |
 | Applications | `49011c2e-8165-4373-a41b-f913b02d1052` | One row per company/role |
 | LC Problems | `9fc96722-d155-4333-9770-41130fb59a39` | LeetCode auto-sync |
-| Interactions | `39753135-a476-819e-96b4-dc41ecab6364` | Universal touchpoint ledger — one row per email/LinkedIn/call/meeting, regardless of whether a richer artifact (e.g. a Calls DB entry) also exists. Written by the email pipeline, LinkedIn tab, Quick Log modal, and Calls tab flows. See `notion/schema.md`. |
+| Interactions | `39753135-a476-819e-96b4-dc41ecab6364` | Universal touchpoint ledger — one row per email/LinkedIn/call/meeting, regardless of whether a richer artifact (e.g. a Calls DB entry) also exists. Written by the email pipeline and `LogInteractionModal.jsx` (all 5 channels, including Call — see Networking Tracker above). See `notion/schema.md`. |
 
 ---
 
@@ -134,11 +156,7 @@ Cost: ~$0.001/email with Haiku (classification only runs once per thread-update,
 
 ---
 
-## Networking Tracker (shipped July 2026)
-
-Built out the Network tab into a full touchpoint-tracking system: Interactions DB (universal ledger), `Referred By` self-relation, in-app contact edit (`ContactDetailModal.jsx`), table view with filters (`ContactsTable.jsx`), relationship graph (`NetworkGraphTab.jsx`), manual LinkedIn conversation logging (`LinkedInTab.jsx`, deliberately manual — no scraping/automation, real LinkedIn ban risk), a Quick Log modal for untranscribed calls, and email reply capture in the Apps Script pipeline. New shared helpers/consts live in `app/src/shared.jsx`; new components in `app/src/components/`. New deps: `@tanstack/react-table`, `react-force-graph-2d`.
-
-Not yet built: mobile quick-capture (generalize QuickLogModal into a floating "+" button), weekly stale-contact digest (Apps Script time trigger), "looks cold" decay badge, warm-intro path finder.
+Not yet built: mobile quick-capture (generalize `LogInteractionModal` into a floating "+" button, especially now that there's a mobile bottom nav bar to anchor it to), weekly stale-contact digest (Apps Script time trigger), "looks cold" decay badge, warm-intro path finder.
 
 ## Features Researched — Next to Build
 

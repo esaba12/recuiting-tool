@@ -1,0 +1,73 @@
+import { NAV_ICON, REFRESH_ICON } from '../../lib/icons.js'
+
+const NAV_ITEMS = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'network',  label: 'Network' },
+  { id: 'pipeline', label: 'Pipeline' },
+  { id: 'actions',  label: 'Actions' },
+  { id: 'github',   label: 'Job Boards' },
+]
+
+export { NAV_ITEMS }
+
+export default function Sidebar({ activeTab, onTabChange, counts = {}, loading, lastLoaded, onRefresh }) {
+  return (
+    <>
+      {/* Desktop sidebar */}
+      <aside className="hidden md:flex flex-col w-60 shrink-0 bg-ink-900 text-ink-50 min-h-screen sticky top-0">
+        <div className="px-5 py-6">
+          <h1 className="font-heading text-lg font-semibold text-white">Recruiting OS</h1>
+          <p className="text-xs text-ink-400 mt-0.5">Fall 2026</p>
+        </div>
+
+        <nav className="flex-1 px-3 space-y-1">
+          {NAV_ITEMS.map(item => {
+            const Icon = NAV_ICON[item.id]
+            const active = activeTab === item.id
+            const count = counts[item.id]
+            return (
+              <button
+                key={item.id}
+                onClick={() => onTabChange(item.id)}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors
+                  ${active ? 'bg-accent-500 text-white' : 'text-ink-300 hover:bg-ink-800 hover:text-white'}`}
+              >
+                {Icon && <Icon size={16} strokeWidth={2} />}
+                <span className="flex-1 text-left">{item.label}</span>
+                {count != null && count !== '' && (
+                  <span className={`text-xs px-1.5 py-0.5 rounded-full ${active ? 'bg-white/20' : 'bg-ink-700 text-ink-300'}`}>{count}</span>
+                )}
+              </button>
+            )
+          })}
+        </nav>
+
+        <div className="px-3 py-4 border-t border-ink-800">
+          <button onClick={onRefresh} disabled={loading}
+            className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-ink-800 text-ink-100 hover:bg-ink-700 disabled:opacity-50 transition-colors">
+            <REFRESH_ICON size={13} className={loading ? 'animate-spin' : ''} />
+            {loading ? 'Loading...' : 'Refresh'}
+          </button>
+          <p className="text-[11px] text-ink-500 mt-2 text-center">
+            {lastLoaded ? `Updated ${lastLoaded}` : 'Loading...'}
+          </p>
+        </div>
+      </aside>
+
+      {/* Mobile bottom bar */}
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-ink-900 border-t border-ink-800 flex items-center justify-around px-1 py-2">
+        {NAV_ITEMS.map(item => {
+          const Icon = NAV_ICON[item.id]
+          const active = activeTab === item.id
+          return (
+            <button key={item.id} onClick={() => onTabChange(item.id)}
+              className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg text-[10px] font-medium ${active ? 'text-accent-400' : 'text-ink-400'}`}>
+              {Icon && <Icon size={18} strokeWidth={2} />}
+              {item.label}
+            </button>
+          )
+        })}
+      </nav>
+    </>
+  )
+}

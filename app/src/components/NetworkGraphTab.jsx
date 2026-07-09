@@ -27,7 +27,7 @@ function buildGraph(contacts) {
       links.push({ source: c.id, target: cid, kind: 'works-at' })
     }
     if (c.referredById) {
-      links.push({ source: c.referredById, target: c.id, kind: 'referred-by' })
+      links.push({ source: c.referredById, target: c.id, kind: 'referdanger-by' })
     }
   })
 
@@ -41,12 +41,12 @@ export default function NetworkGraphTab({ contacts }) {
   const data = useMemo(() => buildGraph(contacts), [contacts])
 
   if (contacts.length === 0) {
-    return <p className="text-center py-20 text-gray-400 text-sm">No contacts yet — nothing to graph.</p>
+    return <p className="text-center py-20 text-ink-400 text-sm">No contacts yet — nothing to graph.</p>
   }
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <div className="md:col-span-2 bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden" style={{ height: 520 }}>
+      <div className="md:col-span-2 bg-white rounded-xl border border-ink-100 shadow-sm overflow-hidden" style={{ height: 520 }}>
         <ForceGraph2D
           ref={fgRef}
           graphData={data}
@@ -62,18 +62,18 @@ export default function NetworkGraphTab({ contacts }) {
             ctx.fillStyle = '#374151'
             ctx.fillText(n.label, n.x, n.y + 8 / scale)
           }}
-          linkColor={l => l.kind === 'referred-by' ? '#6366f1' : '#e5e7eb'}
-          linkWidth={l => l.kind === 'referred-by' ? 2 : 1}
-          linkDirectionalArrowLength={l => l.kind === 'referred-by' ? 4 : 0}
+          linkColor={l => l.kind === 'referdanger-by' ? '#6366f1' : '#e5e7eb'}
+          linkWidth={l => l.kind === 'referdanger-by' ? 2 : 1}
+          linkDirectionalArrowLength={l => l.kind === 'referdanger-by' ? 4 : 0}
           linkDirectionalArrowRelPos={1}
           onNodeClick={n => n.kind === 'contact' && setSelected(n.contact)}
           cooldownTicks={100}
         />
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+      <div className="bg-white rounded-xl border border-ink-100 shadow-sm p-4">
         {!selected ? (
-          <div className="text-sm text-gray-400 space-y-2">
+          <div className="text-sm text-ink-400 space-y-2">
             <p>Click a contact node to see details.</p>
             <p className="text-xs">Gray squares = companies · colored circles = contacts (colored by status) · arrows = "referred by".</p>
           </div>
@@ -81,19 +81,19 @@ export default function NetworkGraphTab({ contacts }) {
           <div className="space-y-2">
             <div className="flex items-start justify-between">
               <div>
-                <p className="font-semibold text-gray-900">{selected.name}</p>
-                {selected.company && <p className="text-sm text-gray-500">{selected.company}</p>}
+                <p className="font-semibold text-ink-900">{selected.name}</p>
+                {selected.company && <p className="text-sm text-ink-500">{selected.company}</p>}
               </div>
-              <button onClick={() => setSelected(null)} className="text-xs text-gray-400 hover:text-gray-600">✕</button>
+              <button onClick={() => setSelected(null)} className="text-xs text-ink-400 hover:text-ink-600">✕</button>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <Badge label={selected.status} color={STATUS_COLOR[selected.status]} />
               {selected.urgency && selected.urgency !== 'LOW' && <Badge label={selected.urgency} color={URGENCY_COLOR[selected.urgency]} />}
             </div>
-            {selected.referredByName && <p className="text-xs text-gray-500">Referred by <strong>{selected.referredByName}</strong></p>}
-            {selected.email && <p className="text-xs"><a href={`mailto:${selected.email}`} className="text-blue-500 hover:underline">{selected.email}</a></p>}
-            {selected.linkedin && <p className="text-xs"><a href={selected.linkedin} target="_blank" rel="noreferrer" className="text-blue-500 hover:underline">LinkedIn ↗</a></p>}
-            {selected.whatTheyDid && <p className="text-xs text-gray-500 italic mt-2">"{selected.whatTheyDid}"</p>}
+            {selected.referredByName && <p className="text-xs text-ink-500">Referred by <strong>{selected.referredByName}</strong></p>}
+            {selected.email && <p className="text-xs"><a href={`mailto:${selected.email}`} className="text-accent-500 hover:underline">{selected.email}</a></p>}
+            {selected.linkedin && <p className="text-xs"><a href={selected.linkedin} target="_blank" rel="noreferrer" className="text-accent-500 hover:underline">LinkedIn ↗</a></p>}
+            {selected.whatTheyDid && <p className="text-xs text-ink-500 italic mt-2">"{selected.whatTheyDid}"</p>}
           </div>
         )}
       </div>
