@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react'
-import { archiveApplication } from '../notion.js'
+import { archiveApplication, updateApplicationTriage } from '../notion.js'
 import { STAGE_ORDER, STAGE_COLOR, TERMINAL_STAGES, daysSince, fmt, Badge, EmptyState, isUntriaged, findDuplicateGroups } from '../shared.jsx'
+import { BUCKET_TO_TRIAGE } from './jobBoards/helpers.js'
+import ApplicationDetailModal from './ApplicationDetailModal.jsx'
 
 function DuplicatesPanel({ apps, onRefresh }) {
   const [expanded, setExpanded] = useState(false)
@@ -77,6 +79,13 @@ function DuplicatesPanel({ apps, onRefresh }) {
 export default function PipelineTab({ apps, onRefresh }) {
   const [filter, setFilter] = useState('active')
   const [search, setSearch] = useState('')
+  const [selectedAppId, setSelectedAppId] = useState(null)
+  const selectedApp = selectedAppId ? apps.find(a => a.id === selectedAppId) : null
+
+  async function changeTriage(app, bucketKey) {
+    await updateApplicationTriage(app.id, BUCKET_TO_TRIAGE[bucketKey === null ? 'review' : bucketKey], app.stage)
+    onRefresh()
+  }
 
   const filtered = apps
     .filter(a => {
@@ -116,7 +125,8 @@ export default function PipelineTab({ apps, onRefresh }) {
               const days = a.daysInStage ?? daysSince(a.lastActivity)
               const stale = days !== null && days > 14 && !TERMINAL_STAGES.includes(a.stage) && a.stage !== 'Offer'
               return (
-                <div key={a.id} className={`bg-white rounded-xl px-4 py-3 shadow-sm border transition-shadow hover:shadow-md ${stale ? 'border-orange-200' : 'border-ink-100'}`}>
+                <div key={a.id} onClick={() => setSelectedAppId(a.id)}
+                  className={`bg-white rounded-xl px-4 py-3 shadow-sm border transition-all cursor-pointer hover:shadow-md hover:border-accent-200 ${stale ? 'border-orange-200' : 'border-ink-100'}`}>
                   <div className="flex items-center gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -133,7 +143,8 @@ export default function PipelineTab({ apps, onRefresh }) {
                           </span>
                         )}
                         {a.jdLink && (
-                          <a href={a.jdLink} target="_blank" rel="noreferrer" className="text-xs text-accent-500 hover:underline">JD ↗</a>
+                          <a href={a.jdLink} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
+                            className="text-xs text-accent-500 hover:underline">JD ↗</a>
                         )}
                       </div>
                       {a.notes && <p className="text-xs text-ink-400 mt-0.5 line-clamp-1">{a.notes}</p>}
@@ -144,6 +155,14 @@ export default function PipelineTab({ apps, onRefresh }) {
             })}
           </div>
         )}
+
+      {selectedApp && (
+        <ApplicationDetailModal
+          app={selectedApp}
+          onStatusChange={s => changeTriage(selectedApp, s)}
+          onClose={() => setSelectedAppId(null)}
+        />
+      )}
     </div>
   )
 }
