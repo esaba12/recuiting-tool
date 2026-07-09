@@ -22,10 +22,10 @@ const NETWORK_VIEWS = [
   { key: 'graph',  label: 'Graph',  icon: Share2 },
 ]
 
-function NetworkTab({ contacts, interactions, onRefresh }) {
+function NetworkTab({ contacts, interactions, onRefresh, initialView = 'table' }) {
   const [filter, setFilter]   = useState('ALL')
   const [search, setSearch]   = useState('')
-  const [view, setView]       = useState('table') // 'table' | 'cards' | 'graph'
+  const [view, setView]       = useState(initialView) // 'table' | 'cards' | 'graph'
   const [editing, setEditing] = useState(null)   // contact object | 'new' | null
   const [logOpen, setLogOpen] = useState(false)
 
@@ -165,6 +165,7 @@ function NetworkTab({ contacts, interactions, onRefresh }) {
 
 export default function App() {
   const [tab, setTab]           = useState('overview')
+  const [networkInitialView, setNetworkInitialView] = useState('table')
   const [contacts, setContacts] = useState([])
   const [apps, setApps]         = useState([])
   const [interactions, setInteractions] = useState([])
@@ -213,8 +214,13 @@ export default function App() {
       error={error}
     >
       {loading && <EmptyState msg="Loading from Notion..." />}
-      {!loading && tab === 'overview' && <OverviewTab contacts={contacts} apps={apps} interactions={interactions} />}
-      {!loading && tab === 'network'  && <NetworkTab contacts={contacts} interactions={interactions} onRefresh={load} />}
+      {!loading && tab === 'overview' && (
+        <OverviewTab contacts={contacts} apps={apps} interactions={interactions}
+          onOpenGraph={() => { setNetworkInitialView('graph'); setTab('network') }} />
+      )}
+      {!loading && tab === 'network'  && (
+        <NetworkTab contacts={contacts} interactions={interactions} onRefresh={load} initialView={networkInitialView} />
+      )}
       {!loading && tab === 'pipeline' && <PipelineTab apps={apps} onRefresh={load} />}
       {!loading && tab === 'actions'  && <ActionsTab contacts={contacts} apps={apps} />}
       {tab === 'github'   && <GitHubTab apps={apps} onImported={load} />}

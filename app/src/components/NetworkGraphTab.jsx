@@ -1,44 +1,9 @@
-import { useMemo, useRef, useState } from 'react'
-import ForceGraph2D from 'react-force-graph-2d'
+import { useState } from 'react'
 import { STATUS_COLOR, Badge, URGENCY_COLOR } from '../shared.jsx'
-
-const STATUS_DOT = {
-  '🟢 Warm':    '#16a34a',
-  '🟡 Cooling': '#ca8a04',
-  '🔴 Cold':    '#dc2626',
-  '✅ Closed':  '#9ca3af',
-  '⭐ Champion':'#ea580c',
-}
-
-function buildGraph(contacts) {
-  const nodes = []
-  const links = []
-  const companyId = (name) => `company:${name.trim().toLowerCase()}`
-  const seenCompanies = new Set()
-
-  contacts.forEach(c => {
-    nodes.push({ id: c.id, kind: 'contact', label: c.name, contact: c })
-    if (c.company?.trim()) {
-      const cid = companyId(c.company)
-      if (!seenCompanies.has(cid)) {
-        seenCompanies.add(cid)
-        nodes.push({ id: cid, kind: 'company', label: c.company.trim() })
-      }
-      links.push({ source: c.id, target: cid, kind: 'works-at' })
-    }
-    if (c.referredById) {
-      links.push({ source: c.referredById, target: c.id, kind: 'referdanger-by' })
-    }
-  })
-
-  return { nodes, links }
-}
+import NetworkGraphView from './NetworkGraphView.jsx'
 
 export default function NetworkGraphTab({ contacts }) {
-  const fgRef = useRef()
   const [selected, setSelected] = useState(null)
-
-  const data = useMemo(() => buildGraph(contacts), [contacts])
 
   if (contacts.length === 0) {
     return <p className="text-center py-20 text-ink-400 text-sm">No contacts yet — nothing to graph.</p>
@@ -47,28 +12,7 @@ export default function NetworkGraphTab({ contacts }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
       <div className="md:col-span-2 bg-white rounded-xl border border-ink-100 shadow-sm overflow-hidden" style={{ height: 520 }}>
-        <ForceGraph2D
-          ref={fgRef}
-          graphData={data}
-          height={520}
-          nodeLabel={n => n.label}
-          nodeVal={n => n.kind === 'company' ? 6 : 4}
-          nodeColor={n => n.kind === 'company' ? '#64748b' : (STATUS_DOT[n.contact?.status] || '#94a3b8')}
-          nodeCanvasObjectMode={() => 'after'}
-          nodeCanvasObject={(n, ctx, scale) => {
-            const fontSize = 10 / scale
-            ctx.font = `${n.kind === 'company' ? 'bold ' : ''}${fontSize}px sans-serif`
-            ctx.textAlign = 'center'
-            ctx.fillStyle = '#374151'
-            ctx.fillText(n.label, n.x, n.y + 8 / scale)
-          }}
-          linkColor={l => l.kind === 'referdanger-by' ? '#6366f1' : '#e5e7eb'}
-          linkWidth={l => l.kind === 'referdanger-by' ? 2 : 1}
-          linkDirectionalArrowLength={l => l.kind === 'referdanger-by' ? 4 : 0}
-          linkDirectionalArrowRelPos={1}
-          onNodeClick={n => n.kind === 'contact' && setSelected(n.contact)}
-          cooldownTicks={100}
-        />
+        <NetworkGraphView contacts={contacts} height={520} onNodeSelect={setSelected} />
       </div>
 
       <div className="bg-white rounded-xl border border-ink-100 shadow-sm p-4">

@@ -3,6 +3,7 @@ import BarChartWrapper from './charts/BarChart.jsx'
 import DonutChart from './charts/DonutChart.jsx'
 import TrendChart from './charts/TrendChart.jsx'
 import { STATUS_CHART_COLORS } from './charts/theme.js'
+import NetworkGraphView from './NetworkGraphView.jsx'
 
 function KPI({ label, value, sub, accent = false }) {
   return (
@@ -25,7 +26,7 @@ function weekStart(d) {
 
 // ── Overview Tab ──────────────────────────────────────────────────────────────
 
-export default function OverviewTab({ contacts, apps, interactions = [] }) {
+export default function OverviewTab({ contacts, apps, interactions = [], onOpenGraph }) {
   const reviewQueue  = apps.filter(a => a.triage === 'Needs Review' && a.stage === 'Wishlist')
   const triagedApps  = apps.filter(a => !isUntriaged(a))
   const activeApps   = triagedApps.filter(a => !TERMINAL_STAGES.includes(a.stage))
@@ -73,6 +74,9 @@ export default function OverviewTab({ contacts, apps, interactions = [] }) {
     return { label, count }
   })
   const hasInteractions = interactions.length > 0
+  const companyCount = new Set(
+    contacts.filter(c => c.company?.trim()).map(c => c.company.trim().toLowerCase())
+  ).size
 
   return (
     <div className="space-y-6">
@@ -149,6 +153,25 @@ export default function OverviewTab({ contacts, apps, interactions = [] }) {
           </div>
         </div>
       )}
+
+      {/* Network preview */}
+      <div onClick={onOpenGraph}
+        className="bg-white rounded-xl border border-ink-100 shadow-sm overflow-hidden cursor-pointer hover:border-accent-200 transition-colors">
+        <div className="flex items-center justify-between px-5 pt-5 pb-3">
+          <div>
+            <h2 className="text-sm font-semibold text-ink-700">Your Network</h2>
+            <p className="text-xs text-ink-400 mt-0.5">
+              {contacts.length} contact{contacts.length !== 1 ? 's' : ''} across {companyCount} compan{companyCount !== 1 ? 'ies' : 'y'}
+            </p>
+          </div>
+          <span className="text-xs text-accent-600 font-medium shrink-0">View full graph →</span>
+        </div>
+        <div style={{ height: 240 }}>
+          {contacts.length === 0
+            ? <p className="text-center py-16 text-ink-400 text-sm">No contacts yet.</p>
+            : <NetworkGraphView contacts={contacts} compact height={240} />}
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Network status donut */}
