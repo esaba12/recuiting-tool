@@ -1,4 +1,5 @@
 import { parseJobDate } from './helpers.js'
+import BarChart from '../charts/BarChart.jsx'
 
 export default function RepoStats({ jobs }) {
   const now     = new Date()
@@ -52,17 +53,11 @@ export default function RepoStats({ jobs }) {
       {topLocs.length > 0 && (
         <div className="bg-white rounded-xl p-4 shadow-sm border border-ink-100">
           <p className="text-xs font-semibold text-ink-500 mb-3">Top Locations</p>
-          <div className="space-y-1.5">
-            {topLocs.map(([loc, count]) => (
-              <div key={loc} className="flex items-center gap-2">
-                <span className="text-xs text-ink-600 w-40 truncate">{loc}</span>
-                <div className="flex-1 h-1.5 bg-ink-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-accent-400 rounded-full" style={{ width: `${(count / topLocs[0][1]) * 100}%` }} />
-                </div>
-                <span className="text-xs text-ink-400 w-6 text-right">{count}</span>
-              </div>
-            ))}
-          </div>
+          <BarChart
+            data={topLocs.map(([loc, count]) => ({ label: loc, value: count }))}
+            orientation="horizontal"
+            height={Math.max(topLocs.length * 36, 120)}
+          />
         </div>
       )}
 

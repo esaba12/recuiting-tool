@@ -1,4 +1,8 @@
 import { STATUS_COLOR, TERMINAL_STAGES, INTERVIEW_STAGES, daysSince, daysUntil, isUntriaged } from '../shared.jsx'
+import BarChartWrapper from './charts/BarChart.jsx'
+import DonutChart from './charts/DonutChart.jsx'
+import TrendChart from './charts/TrendChart.jsx'
+import { STATUS_CHART_COLORS } from './charts/theme.js'
 
 function KPI({ label, value, sub, accent = false }) {
   return (
@@ -10,9 +14,18 @@ function KPI({ label, value, sub, accent = false }) {
   )
 }
 
+// Monday-anchored ISO week start, used to bucket interactions for the trend chart.
+function weekStart(d) {
+  const date = new Date(d)
+  const day = (date.getDay() + 6) % 7 // 0=Monday
+  date.setDate(date.getDate() - day)
+  date.setHours(0, 0, 0, 0)
+  return date
+}
+
 // ── Overview Tab ──────────────────────────────────────────────────────────────
 
-export default function OverviewTab({ contacts, apps }) {
+export default function OverviewTab({ contacts, apps, interactions = [] }) {
   const reviewQueue  = apps.filter(a => a.triage === 'Needs Review' && a.stage === 'Wishlist')
   const triagedApps  = apps.filter(a => !isUntriaged(a))
   const activeApps   = triagedApps.filter(a => !TERMINAL_STAGES.includes(a.stage))
@@ -32,9 +45,34 @@ export default function OverviewTab({ contacts, apps }) {
   const stageCounts = {}
   triagedApps.forEach(a => { stageCounts[a.stage] = (stageCounts[a.stage] || 0) + 1 })
   const funnelStages = ['Wishlist','Applied','Phone Screen','Technical','Onsite','Offer']
-  const maxCount = Math.max(...funnelStages.map(s => stageCounts[s] || 0), 1)
+  const funnelData = funnelStages.map(stage => ({ label: stage, value: stageCounts[stage] || 0 }))
 
-  const barColors = ['bg-ink-300','bg-accent-400','bg-warning-400','bg-orange-400','bg-purple-400','bg-success-500']
+  // Stage-to-stage conversion — new signal, cheap given stageCounts already exists.
+  const conversions = []
+  for (let i = 0; i < funnelStages.length - 1; i++) {
+    const from = stageCounts[funnelStages[i]] || 0
+    const to = stageCounts[funnelStages[i + 1]] || 0
+    if (from > 0) conversions.push({ from: funnelStages[i], to: funnelStages[i + 1], pct: Math.round((to / from) * 100) })
+  }
+
+  const donutData = Object.keys(STATUS_COLOR)
+    .map(status => ({ label: status, value: contacts.filter(c => c.status === status).length, color: STATUS_CHART_COLORS[status] }))
+    .filter(d => d.value > 0)
+
+  // Interactions over the trailing 10 weeks — a signal not visualized anywhere else today.
+  const trendWeeks = []
+  const now = weekStart(new Date())
+  for (let i = 9; i >= 0; i--) {
+    const start = new Date(now)
+    start.setDate(start.getDate() - i * 7)
+    trendWeeks.push(start)
+  }
+  const trendData = trendWeeks.map(start => {
+    const label = start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    const count = interactions.filter(x => x.date && weekStart(x.date).getTime() === start.getTime()).length
+    return { label, count }
+  })
+  const hasInteractions = interactions.length > 0
 
   return (
     <div className="space-y-6">
@@ -57,26 +95,21 @@ export default function OverviewTab({ contacts, apps }) {
 
       {/* Pipeline funnel */}
       <div className="bg-white rounded-xl p-5 shadow-sm border border-ink-100">
-        <h2 className="text-sm font-semibold text-ink-700 mb-5">Application Funnel</h2>
+        <h2 className="text-sm font-semibold text-ink-700 mb-4">Application Funnel</h2>
         {apps.length === 0 ? (
           <p className="text-sm text-ink-400">No applications yet. Add them in Notion or let the email pipeline populate them.</p>
         ) : (
           <>
-            <div className="flex items-end gap-2 h-24">
-              {funnelStages.map((stage, i) => {
-                const count = stageCounts[stage] || 0
-                const h = Math.max(count > 0 ? (count / maxCount) * 80 : 0, count > 0 ? 6 : 0)
-                return (
-                  <div key={stage} className="flex-1 flex flex-col items-center gap-1">
-                    <span className="text-xs font-bold text-ink-700">{count || ''}</span>
-                    <div className={`w-full rounded-t transition-all ${barColors[i]}`} style={{ height: `${h}px` }} />
-                    <span className="text-xs text-ink-400 text-center leading-tight">{stage}</span>
-                  </div>
-                )
-              })}
-            </div>
+            <BarChartWrapper data={funnelData} height={180} />
+            {conversions.length > 0 && (
+              <p className="text-xs text-ink-400 mt-2 flex flex-wrap gap-x-3 gap-y-1">
+                {conversions.map(c => (
+                  <span key={c.to}>{c.from} → {c.to}: <span className="font-medium text-ink-600">{c.pct}%</span></span>
+                ))}
+              </p>
+            )}
             {(stageCounts.Rejected || stageCounts.Accepted) && (
-              <p className="text-xs text-ink-400 mt-3">
+              <p className="text-xs text-ink-400 mt-2">
                 {stageCounts.Rejected ? `${stageCounts.Rejected} rejected` : ''}
                 {stageCounts.Rejected && stageCounts.Accepted ? ' · ' : ''}
                 {stageCounts.Accepted ? `${stageCounts.Accepted} accepted` : ''}
@@ -117,24 +150,22 @@ export default function OverviewTab({ contacts, apps }) {
         </div>
       )}
 
-      {/* Network breakdown */}
-      <div className="bg-white rounded-xl p-5 shadow-sm border border-ink-100">
-        <h2 className="text-sm font-semibold text-ink-700 mb-4">Network</h2>
-        {contacts.length === 0 ? (
-          <p className="text-sm text-ink-400">No contacts yet.</p>
-        ) : (
-          <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
-            {Object.entries(STATUS_COLOR).map(([status, color]) => {
-              const count = contacts.filter(c => c.status === status).length
-              return (
-                <div key={status} className={`rounded-xl p-3 text-center ${color}`}>
-                  <p className="text-2xl font-bold">{count}</p>
-                  <p className="text-xs mt-0.5 leading-tight">{status}</p>
-                </div>
-              )
-            })}
-          </div>
-        )}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Network status donut */}
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-ink-100">
+          <h2 className="text-sm font-semibold text-ink-700 mb-4">Network by Status</h2>
+          {contacts.length === 0
+            ? <p className="text-sm text-ink-400">No contacts yet.</p>
+            : <DonutChart data={donutData} centerLabel="contacts" />}
+        </div>
+
+        {/* Interactions over time */}
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-ink-100">
+          <h2 className="text-sm font-semibold text-ink-700 mb-4">Networking Activity</h2>
+          {!hasInteractions
+            ? <p className="text-sm text-ink-400">No logged interactions yet — use "+ Log Interaction" in Network.</p>
+            : <TrendChart data={trendData} />}
+        </div>
       </div>
     </div>
   )

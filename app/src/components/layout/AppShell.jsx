@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import Sidebar from './Sidebar.jsx'
 
-export default function AppShell({ activeTab, onTabChange, counts, loading, lastLoaded, onRefresh, error, children }) {
+export default function AppShell({ activeTab, onTabChange, counts, loading, lastLoaded, onRefresh, onAddEvent, error, children }) {
   return (
     <div className="flex min-h-screen bg-canvas font-body text-ink-900">
       <Sidebar
@@ -11,6 +11,7 @@ export default function AppShell({ activeTab, onTabChange, counts, loading, last
         loading={loading}
         lastLoaded={lastLoaded}
         onRefresh={onRefresh}
+        onAddEvent={onAddEvent}
       />
 
       <main className="flex-1 px-6 md:px-10 py-8 pb-24 md:pb-8 max-w-7xl mx-auto w-full">

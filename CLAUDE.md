@@ -15,8 +15,10 @@ A zero-touch recruiting OS for a student's SWE/PM internship search. Calls, emai
 | Vercel | Hosting — auto-deploys `main` branch via GitHub integration | ✅ |
 | GitHub | Source + Vercel deploy trigger | ✅ |
 | Google Apps Script | Email pipeline (Gmail → Claude → Notion) | ✅ Built, needs deploy |
-| Claude API (Haiku 4.5) | AI fit analysis, call extraction, email extraction | ✅ Wired via serverless proxy |
-| Notion | Central hub — 5 databases | ✅ Live |
+| Claude API (Haiku 4.5 + Sonnet vision) | AI fit analysis, call/email/LinkedIn extraction, screenshot→calendar-event extraction | ✅ Wired via serverless proxy |
+| Notion | Central hub — 5 databases | ✅ Live (⚠️ see Known Issues if you hit "Could not find database") |
+| Recharts | Overview/Job Boards charts (funnel, donut, trend, top-locations bar) | ✅ Live |
+| Google Calendar API | Screenshot/text → calendar event, via OAuth | ✅ Live in dev · 🔄 needs env vars added to Vercel for production |
 | Granola | Call transcription (no bot) | 🔄 Download + connect |
 | LeetNotion extension | LeetCode → Notion auto-sync | 🔄 Pending install |
 | Exa ($250 YC credits) | Contact enrichment — LinkedIn lookup | 🔄 Planned |
@@ -38,20 +40,23 @@ app/                        ← React + Vite dashboard (PRIMARY) — Vercel root
       icons.js                ← emoji → lucide-react icon lookup maps (STATUS_ICON, BUCKET_ICON, NAV_ICON, etc.)
     components/
       ui/                      ← Hand-rolled shadcn-shaped primitives: Button, Modal (framer-motion transition), Badge, Card, Tabs, Input, Select, EmptyState
-      layout/                  ← Sidebar.jsx (dark nav rail + mobile bottom bar), AppShell.jsx (shell + tab-switch motion)
+      layout/                  ← Sidebar.jsx (dark nav rail + mobile bottom bar + "+ Event" quick action), AppShell.jsx (shell + tab-switch motion)
+      charts/                  ← Recharts wrappers: theme.js (design-token → hex translation), ChartTooltip.jsx, BarChart.jsx (vertical/horizontal), DonutChart.jsx, TrendChart.jsx — presentation-only, no data fetching
       jobBoards/               ← GitHubTab, RepoJobsView, JobCard, JobDetailModal, RepoStats, PreferencesPanel, CalendarView, UserProfileView, ContributionGrid, helpers.js
       OverviewTab.jsx, PipelineTab.jsx (+DuplicatesPanel), ActionsTab.jsx
       ContactDetailModal.jsx, ContactsTable.jsx, NetworkGraphTab.jsx
       LogInteractionModal.jsx  ← Unified Call/LinkedIn/Meeting/Email/Other logging (see Networking Tracker below)
+      AddToCalendarModal.jsx   ← Screenshot/text → Google Calendar event (see Google Calendar Integration below)
     github.js                ← GitHub job board parser
     notion.js                ← Notion API client
   api/                       ← Vercel serverless functions (production key injection)
     notion.js                ← Proxies api.notion.com
     gh-api.js                ← Proxies api.github.com
     gh-contrib.js             ← Proxies github-contributions-api.jogruber.de
-    claude-api.js             ← Proxies api.anthropic.com
-  vercel.json                ← Rewrites /notion, /gh-api, /gh-contrib, /claude-api → api/*
-  vite.config.js            ← Dev proxy config + `@tailwindcss/vite` plugin
+    claude-api.js             ← Proxies api.anthropic.com (builds a fresh headers object — never forwards the browser's Origin, see Known Issues)
+    google-calendar.js        ← Mints a Google access token from the stored refresh token, then forwards to the Calendar API
+  vercel.json                ← Rewrites /notion, /gh-api, /gh-contrib, /claude-api, /google-calendar → api/*
+  vite.config.js            ← Dev proxy config + `@tailwindcss/vite` plugin + custom /google-calendar middleware (server.proxy can't do the mint-then-forward two-step)
 scripts/
   email-pipeline.js         ← Google Apps Script (deploy to script.google.com)
 notion/
@@ -59,6 +64,8 @@ notion/
   setup.js / patch-dbs.js    ← One-off scripts that created/patched the original 4 DBs
   add-interactions-db.js     ← One-off script that created the Interactions DB + Contacts.Referred By self-relation
   add-triage-fields.js       ← One-off script that added Triage/Location/Source Repo to Applications DB
+google-calendar/
+  get-refresh-token.js      ← One-time OAuth script — run once, paste the printed refresh token into .env (see Google Calendar Integration)
 plans/                      ← Phase plans (mostly outdated — see below)
 prompts/                    ← Claude prompts
 context.md                  ← Gitignored, untracked — Notion/Anthropic IDs for reference
@@ -72,6 +79,25 @@ Tailwind converted from a CDN script to a real build (Tailwind v4 + `@tailwindcs
 Layout is a persistent dark sidebar (`components/layout/Sidebar.jsx`) + full-width content area (`components/layout/AppShell.jsx`), collapsing to a bottom tab bar on mobile. `lucide-react` replaced emoji-as-icon usage everywhere except inside Notion select-option data values themselves (`STATUS_COLOR` keys like `'🟢 Warm'` still carry the emoji since that's the literal string written to/read from Notion — icons are looked up separately via `lib/icons.js`'s `statusIconFor()`, not derived from stripping the emoji out of the data). `framer-motion` powers exactly 3 moments: modal open/close (`ui/Modal.jsx`), tab-switch fade (`AppShell.jsx`), and nothing else — deliberately not scattered across hover states.
 
 `App.jsx` was decomposed from ~1836 lines (monolithic, every tab inline) down to ~250 lines (root state/routing only) — every tab is now its own file under `components/`.
+
+## Charts (shipped July 2026)
+
+`recharts` replaced the hand-rolled `<div>` bar/tile charts. All color/mark choices went through this repo's `dataviz` skill (six-check palette validator + form/mark-spec guidance) rather than being eyeballed:
+- **Overview → Application Funnel**: real bar chart (`charts/BarChart.jsx`) + new stage-to-stage conversion % annotation (e.g. "Applied → Phone Screen: 18%"). Uses a single flat accent hue, not a per-stage ramp — axis position already encodes stage order, and no 6-step slice of the `accent` scale cleared the ordinal validator's lightness/contrast checks against the light canvas at that count (see `charts/theme.js`'s comments for the actual validator runs).
+- **Overview → Network by Status**: donut chart (`charts/DonutChart.jsx`) replacing the colored-tile grid, fed by `STATUS_CHART_COLORS` in `charts/theme.js`. Always paired with a visible count legend (not hover-only) — required relief for a contrast WARN the validator flagged on two of the five status colors against the canvas.
+- **Overview → Networking Activity**: new "interactions over time" trend (`charts/TrendChart.jsx`), trailing-10-week bucket of `interactions` data — a signal that had **zero visualization anywhere before this**. Requires `interactions` passed into `OverviewTab` from `App.jsx`.
+- **Job Boards → Top Locations**: real horizontal bar chart, direct swap for the old manual-width `<div>` bars.
+- **Pipeline**: deliberately no new chart — a Triage-bucket donut would mostly restate the Overview funnel (Triage and Stage are correlated).
+
+## Google Calendar Integration (shipped July 2026)
+
+**"+ Event"** button in the sidebar footer (desktop) / floating button above the mobile bottom bar → `AddToCalendarModal.jsx`: paste a screenshot (⌘V or file upload) and/or text → client-side downscale to ~1568px longest side + JPEG re-encode (canvas) → Claude Sonnet vision extraction (`image` + `text` content blocks in one Messages API call — `api/claude-api.js` needed zero changes, it's already a generic JSON passthrough) → editable review form (title/date/start/end/location/description) → "+ Create Event" writes directly to Google Calendar via `api/google-calendar.js`.
+
+**One-time setup: done** (local dev) — see Pending Setup for the one remaining step (Vercel env vars for production). Verified fully end-to-end: real screenshot → Claude vision extraction → review form → actual event created on the live Google Calendar (and deleted again), both via a direct API call and via the app's own dev proxy path.
+
+Gotcha hit during setup: the OAuth consent screen is in **Testing** mode, which means Google blocks anyone not explicitly added as a **Test user** with `Error 403: access_denied`, even the account that owns the Cloud project — add every Google account that needs to use "+ Event" under OAuth consent screen → Test users. Separately, `get-refresh-token.js`'s local callback server picked port 8765 initially, which collided with an unrelated process already listening on that port on this Mac (IPv4-only), causing Google's redirect to hit the wrong server with a generic 404 — moved to port 8901 to fix. If this happens again on a different machine, pick any free port.
+
+Architecture note: unlike `api/notion.js`/`api/claude-api.js` (static bearer token injection), Google's API needs a short-lived access token minted from the refresh token on **every request** — so `api/google-calendar.js` does two upstream fetches (mint, then forward), and the dev-mode equivalent couldn't use Vite's built-in `server.proxy` (static header injection only) — see the custom `googleCalendarDevProxy` middleware in `vite.config.js`.
 
 ## Deployment
 
@@ -117,10 +143,11 @@ What used to be 3 separate top-level tabs (Graph, LinkedIn, Calls) plus a Quick 
 
 ### Vite Proxy (all keys injected server-side, never in browser bundle)
 ```
-/notion    → api.notion.com          (injects NOTION_API_KEY)
-/gh-api    → api.github.com          (injects optional GITHUB_TOKEN)
-/gh-contrib → github-contributions-api.jogruber.de
-/claude-api → api.anthropic.com      (injects ANTHROPIC_API_KEY)
+/notion          → api.notion.com              (injects NOTION_API_KEY)
+/gh-api          → api.github.com              (injects optional GITHUB_TOKEN)
+/gh-contrib      → github-contributions-api.jogruber.de
+/claude-api      → api.anthropic.com           (injects ANTHROPIC_API_KEY; strips incoming Origin/Referer — see Known Issues)
+/google-calendar → www.googleapis.com          (mints an access token from GOOGLE_REFRESH_TOKEN first, then forwards)
 ```
 
 ---
@@ -156,7 +183,21 @@ Cost: ~$0.001/email with Haiku (classification only runs once per thread-update,
 
 ---
 
-Not yet built: mobile quick-capture (generalize `LogInteractionModal` into a floating "+" button, especially now that there's a mobile bottom nav bar to anchor it to), weekly stale-contact digest (Apps Script time trigger), "looks cold" decay badge, warm-intro path finder.
+## Known Issues
+
+- **"Notion connection error: Could not find database with ID..."** — the API key is valid (resolves fine against `/v1/users/me`) but the specific databases are no longer shared with the integration, most likely from a key rotation or workspace change during the public-release prep. Fix (manual, in Notion, not fixable via API): open each database → `•••` → **Connections** → add the "Recruiting OS" integration back. As of this writing this was flagged to the user but not yet confirmed fixed.
+- **Claude API calls from the browser in dev mode can fail with `"CORS requests must set 'anthropic-dangerous-direct-browser-access' header"`** — Vite's `server.proxy` forwards the browser's `Origin`/`Referer` headers through to Anthropic by default, which Anthropic's API treats as a direct-browser-access attempt and rejects, even though the call is genuinely server-to-server (the proxy injects the key, the browser never sees it). Fixed in `vite.config.js`'s `/claude-api` proxy entry via a `configure` hook that strips both headers before forwarding. Production's `api/claude-api.js` never had this problem — it builds a fresh headers object rather than forwarding the incoming request's headers. If a *new* proxied endpoint is added that calls an API sensitive to Origin, apply the same fix.
+
+## Pending Setup (one-time)
+
+- **Re-share Notion databases with the integration** (see Known Issues above) — needed for the app to function at all right now.
+- Deploy Google Apps Script email pipeline (script.google.com)
+- Download Granola + connect Google Calendar
+- Install LeetNotion VS Code extension for LC → Notion sync
+
+**Done:** Google Calendar OAuth (`GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`/`GOOGLE_REFRESH_TOKEN` are in `.env` — Cloud Console project is `recruitingos`; OAuth consent screen is in Testing mode, so **only the Google account added as a test user can authorize this app** — `ethansaba12@gmail.com` is added; add any other account there too before it can use "+ Event"). Verified end-to-end: created and deleted a real Calendar event both via a direct API call and via the dev-mode `/google-calendar` proxy. **Still needed for production**: add the same 3 env vars to Vercel's encrypted env vars, or the deployed app's "+ Event" won't be able to create events (only local dev works right now).
+
+Not yet built: mobile quick-capture generalized across both action modals (the "+ Event" floating button pattern now exists in `Sidebar.jsx` — extending the same affordance to `LogInteractionModal` is now cheap), weekly stale-contact digest (Apps Script time trigger), "looks cold" decay badge, warm-intro path finder.
 
 ## Features Researched — Next to Build
 

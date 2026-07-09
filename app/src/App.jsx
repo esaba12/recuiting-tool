@@ -11,6 +11,7 @@ import OverviewTab from './components/OverviewTab.jsx'
 import PipelineTab from './components/PipelineTab.jsx'
 import ActionsTab from './components/ActionsTab.jsx'
 import GitHubTab from './components/jobBoards/GitHubTab.jsx'
+import AddToCalendarModal from './components/AddToCalendarModal.jsx'
 import { Table2, LayoutGrid, Share2 } from 'lucide-react'
 
 // ── Network Tab ───────────────────────────────────────────────────────────────
@@ -170,6 +171,7 @@ export default function App() {
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState(null)
   const [lastLoaded, setLastLoaded] = useState(null)
+  const [addEventOpen, setAddEventOpen] = useState(false)
 
   useEffect(() => { load() }, [])
 
@@ -207,14 +209,17 @@ export default function App() {
       loading={loading}
       lastLoaded={lastLoaded}
       onRefresh={load}
+      onAddEvent={() => setAddEventOpen(true)}
       error={error}
     >
       {loading && <EmptyState msg="Loading from Notion..." />}
-      {!loading && tab === 'overview' && <OverviewTab contacts={contacts} apps={apps} />}
+      {!loading && tab === 'overview' && <OverviewTab contacts={contacts} apps={apps} interactions={interactions} />}
       {!loading && tab === 'network'  && <NetworkTab contacts={contacts} interactions={interactions} onRefresh={load} />}
       {!loading && tab === 'pipeline' && <PipelineTab apps={apps} onRefresh={load} />}
       {!loading && tab === 'actions'  && <ActionsTab contacts={contacts} apps={apps} />}
       {tab === 'github'   && <GitHubTab apps={apps} onImported={load} />}
+
+      {addEventOpen && <AddToCalendarModal onClose={() => setAddEventOpen(false)} />}
     </AppShell>
   )
 }

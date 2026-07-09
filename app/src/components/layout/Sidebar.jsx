@@ -1,4 +1,4 @@
-import { NAV_ICON, REFRESH_ICON } from '../../lib/icons.js'
+import { NAV_ICON, REFRESH_ICON, CALENDAR_ICON } from '../../lib/icons.js'
 
 const NAV_ITEMS = [
   { id: 'overview', label: 'Overview' },
@@ -10,7 +10,7 @@ const NAV_ITEMS = [
 
 export { NAV_ITEMS }
 
-export default function Sidebar({ activeTab, onTabChange, counts = {}, loading, lastLoaded, onRefresh }) {
+export default function Sidebar({ activeTab, onTabChange, counts = {}, loading, lastLoaded, onRefresh, onAddEvent }) {
   return (
     <>
       {/* Desktop sidebar */}
@@ -42,7 +42,12 @@ export default function Sidebar({ activeTab, onTabChange, counts = {}, loading, 
           })}
         </nav>
 
-        <div className="px-3 py-4 border-t border-ink-800">
+        <div className="px-3 py-4 border-t border-ink-800 space-y-2">
+          <button onClick={onAddEvent}
+            className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-accent-500 text-white hover:bg-accent-600 transition-colors">
+            <CALENDAR_ICON size={13} />
+            + Event
+          </button>
           <button onClick={onRefresh} disabled={loading}
             className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-ink-800 text-ink-100 hover:bg-ink-700 disabled:opacity-50 transition-colors">
             <REFRESH_ICON size={13} className={loading ? 'animate-spin' : ''} />
@@ -68,6 +73,12 @@ export default function Sidebar({ activeTab, onTabChange, counts = {}, loading, 
           )
         })}
       </nav>
+
+      {/* Mobile floating quick-action (anchored above the bottom bar) */}
+      <button onClick={onAddEvent}
+        className="md:hidden fixed right-4 bottom-20 z-30 w-12 h-12 rounded-full bg-accent-500 text-white shadow-lg flex items-center justify-center hover:bg-accent-600">
+        <CALENDAR_ICON size={20} />
+      </button>
     </>
   )
 }
