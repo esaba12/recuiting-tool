@@ -10,6 +10,7 @@ import NetworkGraphTab from './components/NetworkGraphTab.jsx'
 import OverviewTab from './components/OverviewTab.jsx'
 import PipelineTab from './components/PipelineTab.jsx'
 import ActionsTab from './components/ActionsTab.jsx'
+import CalendarTab from './components/CalendarTab.jsx'
 import GitHubTab from './components/jobBoards/GitHubTab.jsx'
 import AddToCalendarModal from './components/AddToCalendarModal.jsx'
 import { Table2, LayoutGrid, Share2 } from 'lucide-react'
@@ -223,6 +224,7 @@ export default function App() {
       )}
       {!loading && tab === 'pipeline' && <PipelineTab apps={apps} onRefresh={load} />}
       {!loading && tab === 'actions'  && <ActionsTab contacts={contacts} apps={apps} />}
+      {!loading && tab === 'calendar' && <CalendarTab contacts={contacts} apps={apps} onRefresh={load} />}
       {tab === 'github'   && <GitHubTab apps={apps} onImported={load} />}
 
       {addEventOpen && <AddToCalendarModal onClose={() => setAddEventOpen(false)} />}

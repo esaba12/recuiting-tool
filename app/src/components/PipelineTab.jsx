@@ -80,6 +80,7 @@ export default function PipelineTab({ apps, onRefresh }) {
   const [filter, setFilter] = useState('active')
   const [search, setSearch] = useState('')
   const [selectedAppId, setSelectedAppId] = useState(null)
+  const [addingNew, setAddingNew] = useState(false)
   const selectedApp = selectedAppId ? apps.find(a => a.id === selectedAppId) : null
 
   async function changeTriage(app, bucketKey) {
@@ -114,7 +115,11 @@ export default function PipelineTab({ apps, onRefresh }) {
         ))}
         <input value={search} onChange={e => setSearch(e.target.value)}
           placeholder="Search company, role..."
-          className="ml-auto px-3 py-1 border border-ink-200 rounded-full text-xs focus:outline-none focus:border-accent-400 w-44" />
+          className="px-3 py-1 border border-ink-200 rounded-full text-xs focus:outline-none focus:border-accent-400 w-44" />
+        <button onClick={() => setAddingNew(true)}
+          className="ml-auto px-3 py-1 bg-accent-600 text-white rounded-full text-xs font-medium hover:bg-accent-700">
+          + Add Application
+        </button>
       </div>
 
       {filtered.length === 0
@@ -156,11 +161,13 @@ export default function PipelineTab({ apps, onRefresh }) {
           </div>
         )}
 
-      {selectedApp && (
+      {(selectedApp || addingNew) && (
         <ApplicationDetailModal
           app={selectedApp}
           onStatusChange={s => changeTriage(selectedApp, s)}
-          onClose={() => setSelectedAppId(null)}
+          onClose={() => { setSelectedAppId(null); setAddingNew(false) }}
+          onDelete={async () => { await archiveApplication(selectedApp.id); setSelectedAppId(null); onRefresh() }}
+          onSaved={() => { setAddingNew(false); onRefresh() }}
         />
       )}
     </div>

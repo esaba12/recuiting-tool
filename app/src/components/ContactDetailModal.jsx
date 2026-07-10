@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { addContact, updateContact } from '../notion.js'
+import { addContact, updateContact, archiveContact } from '../notion.js'
 import { ROLE_OPTIONS, SOURCE_OPTIONS, STATUS_OPTIONS, URGENCY_OPTIONS, Badge, fmt } from '../shared.jsx'
 import LogInteractionModal from './LogInteractionModal.jsx'
 
@@ -22,6 +22,7 @@ export default function ContactDetailModal({ contact, contacts, interactions, on
     followUpDate: contact?.followUpDate ? contact.followUpDate.slice(0, 10) : '',
   }))
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [error, setError]   = useState(null)
   const [logOpen, setLogOpen] = useState(false)
 
@@ -51,6 +52,18 @@ export default function ContactDetailModal({ contact, contacts, interactions, on
     } catch (e) {
       setError(e.message)
       setSaving(false)
+    }
+  }
+
+  async function del() {
+    if (!confirm(`Delete ${contact.name}? This archives them in Notion (recoverable from Notion's trash).`)) return
+    setDeleting(true); setError(null)
+    try {
+      await archiveContact(contact.id)
+      onSaved()
+    } catch (e) {
+      setError(e.message)
+      setDeleting(false)
     }
   }
 
@@ -160,6 +173,13 @@ export default function ContactDetailModal({ contact, contacts, interactions, on
             className="w-full py-3 bg-accent-600 text-white text-sm rounded-xl hover:bg-accent-700 disabled:opacity-50 font-medium transition-colors">
             {saving ? 'Saving...' : isNew ? '+ Add Contact' : 'Save Changes'}
           </button>
+
+          {!isNew && (
+            <button onClick={del} disabled={deleting}
+              className="w-full py-2 text-danger-600 text-xs rounded-xl hover:bg-danger-50 disabled:opacity-50 font-medium transition-colors">
+              {deleting ? 'Deleting...' : 'Delete Contact'}
+            </button>
+          )}
         </div>
       </div>
 

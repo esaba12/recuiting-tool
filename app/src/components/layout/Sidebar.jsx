@@ -5,6 +5,7 @@ const NAV_ITEMS = [
   { id: 'network',  label: 'Network' },
   { id: 'pipeline', label: 'Pipeline' },
   { id: 'actions',  label: 'Actions' },
+  { id: 'calendar', label: 'Calendar' },
   { id: 'github',   label: 'Job Boards' },
 ]
 

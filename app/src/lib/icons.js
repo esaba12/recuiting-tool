@@ -3,7 +3,7 @@ import {
   AlertTriangle, AlertCircle, Circle,
   Inbox, Send, HelpCircle, X,
   LayoutDashboard, Users, Kanban, ListChecks, GitFork,
-  RefreshCw, ExternalLink, Search, MapPin, Calendar,
+  RefreshCw, ExternalLink, Search, MapPin, Calendar, CalendarDays,
 } from 'lucide-react'
 
 // Contact Status — STATUS_COLOR keys in shared.jsx embed the emoji in the literal string
@@ -38,6 +38,7 @@ export const NAV_ICON = {
   network: Users,
   pipeline: Kanban,
   actions: ListChecks,
+  calendar: CalendarDays,
   github: GitFork,
 }
 

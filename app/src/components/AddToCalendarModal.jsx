@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import { Image as ImageIcon, X } from 'lucide-react'
 import Modal from './ui/Modal.jsx'
 import Button from './ui/Button.jsx'
+import { createEvent as createCalendarEvent, addOneHour } from '../googleCalendar.js'
 
 const MAX_DIM = 1568 // Anthropic's documented vision token-efficiency sweet spot
 
@@ -62,13 +63,6 @@ ${text ? `Text:\n${text}` : ''}`,
   return JSON.parse(match[0])
 }
 
-function addOneHour(time) {
-  const [h, m] = time.split(':').map(Number)
-  const d = new Date(2000, 0, 1, h, m)
-  d.setHours(d.getHours() + 1)
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-}
-
 export default function AddToCalendarModal({ onClose }) {
   const [text, setText] = useState('')
   const [imagePreview, setImagePreview] = useState(null) // data URL for <img>
@@ -116,25 +110,15 @@ export default function AddToCalendarModal({ onClose }) {
       const date = field('date')
       const startTime = field('start_time')
       const endTime = field('end_time') || (startTime ? addOneHour(startTime) : '')
-      const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
 
-      const body = {
-        summary: field('title') || 'Untitled event',
-        location: field('location') || undefined,
-        description: field('description') || undefined,
-        start: startTime ? { dateTime: `${date}T${startTime}:00`, timeZone } : { date },
-        end: endTime ? { dateTime: `${date}T${endTime}:00`, timeZone } : { date },
-      }
-
-      const res = await fetch('/google-calendar/calendar/v3/calendars/primary/events', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+      await createCalendarEvent({
+        title: field('title'),
+        date,
+        startTime,
+        endTime,
+        location: field('location'),
+        description: field('description'),
       })
-      if (!res.ok) {
-        const e = await res.json().catch(() => ({}))
-        throw new Error(e.error?.message || `Calendar API ${res.status}`)
-      }
       setSaving('done')
     } catch (e) {
       setError(e.message)

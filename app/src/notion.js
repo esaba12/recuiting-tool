@@ -223,3 +223,7 @@ export async function fetchApplications() {
 export async function archiveApplication(id) {
   return notionPatch(`/pages/${id}`, { archived: true })
 }
+
+export async function archiveContact(id) {
+  return notionPatch(`/pages/${id}`, { archived: true })
+}
