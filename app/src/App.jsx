@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { fetchContacts, fetchApplications, fetchInteractions } from './notion.js'
-import { STATUS_COLOR, URGENCY_COLOR, daysSince, daysUntil, fmt, Badge, EmptyState } from './shared.jsx'
+import { STATUS_COLOR, URGENCY_COLOR, daysSince, daysUntil, fmt, Badge, EmptyState, isOverdue } from './shared.jsx'
 import { statusIconFor, URGENCY_ICON } from './lib/icons.js'
 import AppShell from './components/layout/AppShell.jsx'
 import ContactDetailModal from './components/ContactDetailModal.jsx'
@@ -92,7 +92,7 @@ function NetworkTab({ contacts, interactions, onRefresh, initialView = 'table' }
         : (
           <div className="space-y-2">
             {filtered.map(c => {
-              const overdue = c.followUpDate && daysUntil(c.followUpDate) <= 0
+              const overdue = isOverdue(c)
               const lastSeen = daysSince(c.lastInteraction)
               return (
                 <div key={c.id} onClick={() => setEditing(c)}
@@ -188,9 +188,7 @@ export default function App() {
   }
 
   const activeApps = apps.filter(a => !['Rejected','Accepted'].includes(a.stage))
-  const overdueCount = contacts.filter(c =>
-    c.status !== '✅ Closed' && c.followUpDate && Math.floor((new Date(c.followUpDate) - Date.now()) / 86400000) <= 0
-  ).length
+  const overdueCount = contacts.filter(isOverdue).length
   const staleCount = activeApps.filter(a => {
     const d = a.daysInStage ?? (a.lastActivity ? Math.floor((Date.now() - new Date(a.lastActivity)) / 86400000) : null)
     return d !== null && d > 14

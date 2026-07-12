@@ -1,3 +1,5 @@
+import { claudeJSON, CLAUDE_MODELS } from '../../lib/claude.js'
+
 export const LEVEL_COLOR = ['#ebedf0', '#9be9a8', '#40c463', '#30a14e', '#216e39']
 export const LANG_COLOR  = ['bg-blue-500','bg-purple-500','bg-yellow-500','bg-green-500','bg-red-500','bg-orange-500']
 
@@ -83,15 +85,10 @@ export async function generateJobAnalysis(job, prefs) {
     prefs.companyType        && `Company type: ${prefs.companyType}`,
   ].filter(Boolean).join('\n') || 'No specific preferences set'
 
-  const res = await fetch('/claude-api/v1/messages', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 450,
-      messages: [{
-        role: 'user',
-        content: `You are a recruiting advisor. A CS student targeting SWE internships is evaluating:
+  return claudeJSON({
+    model: CLAUDE_MODELS.HAIKU,
+    maxTokens: 450,
+    content: `You are a recruiting advisor. A CS student targeting SWE internships is evaluating:
 
 Company: ${job.company}
 Role: ${job.role || 'Internship'}
@@ -113,20 +110,7 @@ Reply with JSON only — no explanation, no markdown:
     "size": "startup|growth|mid|large|faang",
     "culture": "one honest sentence about the engineering culture or reputation"
   }
-}`
-      }]
-    })
+}`,
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(res.status === 401 || res.status === 403
-      ? 'Add ANTHROPIC_API_KEY to your .env to enable AI analysis'
-      : err.error?.message || `API error ${res.status}`)
-  }
-  const data = await res.json()
-  const text = data.content[0].text
-  const match = text.match(/\{[\s\S]*\}/)
-  if (!match) throw new Error('Unexpected AI response format')
-  return JSON.parse(match[0])
 }
 
