@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { addContact, updateContact, archiveContact } from '../notion.js'
 import { ROLE_OPTIONS, SOURCE_OPTIONS, STATUS_OPTIONS, URGENCY_OPTIONS, Badge, fmt } from '../shared.jsx'
 import LogInteractionModal from './LogInteractionModal.jsx'
+import DraftPanel from './DraftPanel.jsx'
 
 const TYPE_COLOR = { Email: 'bg-accent-100 text-accent-700', LinkedIn: 'bg-purple-100 text-purple-700', Call: 'bg-success-100 text-success-700', Meeting: 'bg-orange-100 text-orange-700', Other: 'bg-ink-100 text-ink-600' }
 
@@ -25,6 +26,7 @@ export default function ContactDetailModal({ contact, contacts, interactions, on
   const [deleting, setDeleting] = useState(false)
   const [error, setError]   = useState(null)
   const [logOpen, setLogOpen] = useState(false)
+  const [draftOpen, setDraftOpen] = useState(false)
 
   const set = (key, val) => setForm(f => ({ ...f, [key]: val }))
 
@@ -166,6 +168,19 @@ export default function ContactDetailModal({ contact, contacts, interactions, on
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {!isNew && history.length <= 1 && (
+            <div className="pt-3 border-t border-ink-100">
+              {draftOpen ? (
+                <DraftPanel contact={contact} kind="cold_open" />
+              ) : (
+                <button onClick={() => setDraftOpen(true)}
+                  className="w-full py-2 bg-white border border-accent-200 rounded-xl text-xs font-medium text-accent-700 hover:border-accent-400">
+                  ✎ Draft outreach — little or no interaction history with this contact yet
+                </button>
+              )}
             </div>
           )}
 

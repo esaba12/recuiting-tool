@@ -145,6 +145,9 @@ export async function fetchContacts() {
     notes:           str(p.properties.Notes),
     whatTheyDid:     str(p.properties["What They've Done For Me"]),
     referredById:    p.properties['Referred By']?.relation?.[0]?.id || null,
+    followUpDraft:     str(p.properties['Follow-Up Draft']),
+    followUpDraftTier: num(p.properties['Follow-Up Draft Tier']),
+    followUpDraftKind: sel(p.properties['Follow-Up Draft Kind']),
   }))
   const byId = Object.fromEntries(contacts.map(c => [c.id, c]))
   return contacts.map(c => ({ ...c, referredByName: c.referredById ? (byId[c.referredById]?.name || null) : null }))
@@ -166,6 +169,9 @@ export async function updateContact(id, fields) {
   if ('lastInteraction' in fields) properties['Last Interaction'] = { date: fields.lastInteraction ? { start: fields.lastInteraction } : null }
   if ('followUpDate' in fields)    properties['Follow-Up Date']  = { date: fields.followUpDate ? { start: fields.followUpDate } : null }
   if ('referredById' in fields)    properties['Referred By']     = { relation: fields.referredById ? [{ id: fields.referredById }] : [] }
+  if ('followUpDraft' in fields)     properties['Follow-Up Draft']      = { rich_text: [{ text: { content: fields.followUpDraft || '' } }] }
+  if ('followUpDraftTier' in fields) properties['Follow-Up Draft Tier'] = { number: fields.followUpDraftTier ?? null }
+  if ('followUpDraftKind' in fields) properties['Follow-Up Draft Kind'] = fields.followUpDraftKind ? { select: { name: fields.followUpDraftKind } } : { select: null }
   return notionPatch(`/pages/${id}`, { properties })
 }
 

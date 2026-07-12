@@ -1,6 +1,9 @@
+import { useState } from 'react'
 import { STATUS_COLOR, URGENCY_COLOR, STAGE_COLOR, TERMINAL_STAGES, daysSince, daysUntil, fmt, Badge, EmptyState, isUntriaged, isOverdue } from '../shared.jsx'
+import { updateContact, addInteraction } from '../notion.js'
+import DraftPanel from './DraftPanel.jsx'
 
-export default function ActionsTab({ contacts, apps }) {
+export default function ActionsTab({ contacts, apps, interactions = [], onRefresh }) {
   const activeApps = apps.filter(a => !TERMINAL_STAGES.includes(a.stage) && !isUntriaged(a))
 
   const overdueContacts = contacts
@@ -31,14 +34,7 @@ export default function ActionsTab({ contacts, apps }) {
       {overdueContacts.length > 0 && (
         <Section title={`Overdue Follow-Ups (${overdueContacts.length})`} accent="red">
           {overdueContacts.map(c => (
-            <ActionRow key={c.id}
-              primary={c.name}
-              secondary={[c.company, c.role].filter(Boolean).join(' · ')}
-              link={c.email ? { href: `mailto:${c.email}`, label: c.email } : null}
-              badge={<Badge label={c.status} color={STATUS_COLOR[c.status]} />}
-              meta={`Was due ${fmt(c.followUpDate)} (${Math.abs(daysUntil(c.followUpDate))}d ago)`}
-              metaColor="text-danger-600"
-            />
+            <OverdueContactRow key={c.id} contact={c} interactions={interactions} onRefresh={onRefresh} />
           ))}
         </Section>
       )}
@@ -85,6 +81,66 @@ function Section({ title, subtitle, accent, children }) {
       <h2 className={`text-sm font-semibold ${heading} mb-1`}>{title}</h2>
       {subtitle && <p className="text-xs text-ink-400 mb-3">{subtitle}</p>}
       <div className="divide-y divide-ink-100">{children}</div>
+    </div>
+  )
+}
+
+// A contact whose Follow-Up Date already passed, but who has a logged interaction newer
+// than that date — the date's just stale, not actually overdue. Drafting an escalating
+// follow-up here would nag someone already re-engaged; surface a "bump the date" hint
+// instead of the draft flow.
+function hasNewerInteraction(contact, interactions) {
+  return interactions.some(i => i.contactId === contact.id && i.date && contact.followUpDate && new Date(i.date) > new Date(contact.followUpDate))
+}
+
+function OverdueContactRow({ contact: c, interactions, onRefresh }) {
+  const [expanded, setExpanded] = useState(false)
+  const [marking, setMarking] = useState(false)
+  const alreadyTouched = hasNewerInteraction(c, interactions)
+
+  async function markFollowedUp() {
+    setMarking(true)
+    try {
+      const nextFollowUp = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]
+      await updateContact(c.id, { followUpDate: nextFollowUp, lastInteraction: new Date().toISOString().split('T')[0] })
+      await addInteraction({ contactId: c.id, contactName: c.name, type: 'Other', direction: 'Outbound', summary: 'Followed up (marked via Actions)' })
+      onRefresh?.()
+    } catch {
+      setMarking(false)
+    }
+  }
+
+  return (
+    <div className="py-2.5">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0 cursor-pointer" onClick={() => setExpanded(e => !e)}>
+          <p className="text-sm font-medium text-ink-900">{c.name}</p>
+          <p className="text-xs text-ink-500">{[c.company, c.role].filter(Boolean).join(' · ')}</p>
+          {c.email && <a href={`mailto:${c.email}`} onClick={e => e.stopPropagation()} className="text-xs text-accent-500 hover:underline">{c.email}</a>}
+        </div>
+        <div className="text-right shrink-0 space-y-1">
+          <Badge label={c.status} color={STATUS_COLOR[c.status]} />
+          <p className="text-xs font-medium text-danger-600">Was due {fmt(c.followUpDate)} ({Math.abs(daysUntil(c.followUpDate))}d ago)</p>
+          <div className="flex items-center gap-2 justify-end">
+            <button onClick={() => setExpanded(e => !e)} className="text-xs text-accent-500 hover:underline">
+              {expanded ? 'Hide' : alreadyTouched ? 'Details' : 'Draft follow-up'}
+            </button>
+            <button onClick={markFollowedUp} disabled={marking} className="text-xs text-ink-400 hover:text-ink-600 hover:underline disabled:opacity-40">
+              {marking ? 'Marking...' : 'Mark followed up'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {expanded && (
+        alreadyTouched
+          ? (
+            <div className="bg-warning-50 border border-warning-200 rounded-xl p-3 mt-2 text-xs text-warning-800">
+              A newer interaction is already logged for this contact — the Follow-Up Date field is just stale. Open the contact and update it, or use "Mark followed up" above.
+            </div>
+          )
+          : <DraftPanel contact={c} kind="follow_up" daysOverdue={Math.abs(daysUntil(c.followUpDate))} onSaved={onRefresh} />
+      )}
     </div>
   )
 }
