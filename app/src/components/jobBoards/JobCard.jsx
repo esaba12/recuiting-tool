@@ -1,9 +1,11 @@
-import { BUCKET_CONFIG, BUCKET_TAG } from './helpers.js'
+import { BUCKET_CONFIG, BUCKET_TAG, jobAgeDays, isGhostJob } from './helpers.js'
 import { BUCKET_ICON, LOCATION_ICON } from '../../lib/icons.js'
 
 export default function JobCard({ job, status, onStatusChange, onClick }) {
   const initials = job.company.replace(/[^a-zA-Z ]/g, '').trim().slice(0, 2).toUpperCase() || '??'
   const isClosed = job.status === 'closed'
+  const ageDays = jobAgeDays(job)
+  const stale = isGhostJob(job)
 
   function toggleStatus(e, key) {
     e.stopPropagation()
@@ -14,6 +16,7 @@ export default function JobCard({ job, status, onStatusChange, onClick }) {
     <div onClick={() => !isClosed && onClick()}
       className={`bg-white rounded-xl border p-4 transition-all group
         ${isClosed ? 'opacity-40 cursor-default border-ink-100' :
+          stale ? 'opacity-70 cursor-pointer border-ink-100 hover:border-accent-200 hover:shadow-md hover:-translate-y-0.5' :
           'cursor-pointer border-ink-100 hover:border-accent-200 hover:shadow-md hover:-translate-y-0.5'}`}>
       <div className="flex items-start gap-3">
         <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 select-none
@@ -42,6 +45,15 @@ export default function JobCard({ job, status, onStatusChange, onClick }) {
               </span>
             )}
             {job.dateAdded && <span className="text-xs text-ink-400">{job.dateAdded}</span>}
+            {!isClosed && stale && (
+              <span title={`No update detected in ${ageDays} days — may be a ghost listing`}
+                className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-warning-100 text-warning-800">
+                👻 Stale {ageDays}d
+              </span>
+            )}
+            {!isClosed && ageDays === null && job.dateAdded && !/^[-—\s]+$/.test(job.dateAdded) && (
+              <span title="Couldn't parse a posting date from this listing" className="text-[10px] text-ink-300">age unknown</span>
+            )}
           </div>
           {/* Status row */}
           <div className="flex items-center gap-1 mt-2.5">

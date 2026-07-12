@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { addApplication, updateApplicationTriage } from '../../notion.js'
 import { EmptyState } from '../../shared.jsx'
-import { BUCKET_CONFIG, BUCKET_ACTIVE, BUCKET_TO_TRIAGE, TRIAGE_TO_BUCKET, lsGet, lsSet, jobId, parseJobDate } from './helpers.js'
+import { BUCKET_CONFIG, BUCKET_ACTIVE, BUCKET_TO_TRIAGE, TRIAGE_TO_BUCKET, lsGet, lsSet, jobId, parseJobDate, isGhostJob } from './helpers.js'
 import PreferencesPanel from './PreferencesPanel.jsx'
 import JobCard from './JobCard.jsx'
 import CalendarView from './CalendarView.jsx'
@@ -16,6 +16,7 @@ export default function RepoJobsView({ data, apps, onImported, onClear }) {
   const [bucket, setBucket]     = useState('all')
   const [search, setSearch]     = useState('')
   const [locFilter, setLocFilter] = useState('')
+  const [hideStale, setHideStale] = useState(false)
   const [selectedDay, setSelectedDay] = useState(null)
   const [selectedJob, setSelectedJob] = useState(null)
   const [page, setPage]         = useState(1)
@@ -87,7 +88,7 @@ export default function RepoJobsView({ data, apps, onImported, onClear }) {
     lsSet(prefsKey, p)
   }
 
-  useEffect(() => setPage(1), [bucket, search, locFilter, selectedDay])
+  useEffect(() => setPage(1), [bucket, search, locFilter, selectedDay, hideStale])
 
   const bucketCounts = Object.fromEntries(
     BUCKET_CONFIG.map(b => [b.key, b.key === 'all' ? data.jobs.length :
@@ -96,6 +97,7 @@ export default function RepoJobsView({ data, apps, onImported, onClear }) {
 
   const filtered = data.jobs.filter(j => {
     if (bucket !== 'all' && statusFor(j) !== bucket) return false
+    if (hideStale && isGhostJob(j)) return false
     const loc = (j.location || '').toLowerCase()
     if (locFilter && !loc.includes(locFilter.toLowerCase())) return false
     if (search) {
@@ -113,8 +115,12 @@ export default function RepoJobsView({ data, apps, onImported, onClear }) {
     }
     return true
   })
+  // Ghost/stale listings sink to the bottom rather than being removed outright — a false
+  // positive during a time-pressured season shouldn't hide a real posting, only deprioritize it.
+  // Array.prototype.sort is stable, so within each group the original order is preserved.
+  const sorted = hideStale ? filtered : filtered.slice().sort((a, b) => (isGhostJob(a) ? 1 : 0) - (isGhostJob(b) ? 1 : 0))
 
-  const paginated = filtered.slice(0, page * PER_PAGE)
+  const paginated = sorted.slice(0, page * PER_PAGE)
 
   return (
     <div className="space-y-4">
@@ -208,9 +214,17 @@ export default function RepoJobsView({ data, apps, onImported, onClear }) {
               {loc}
             </button>
           ))}
+          <button onClick={() => setHideStale(h => !h)}
+            title="Hide listings with no detected update in 45+ days"
+            className={`px-2.5 py-1 rounded-full text-xs border transition-colors ml-auto
+              ${hideStale
+                ? 'bg-warning-500 text-white border-warning-500'
+                : 'bg-white text-ink-500 border-ink-200 hover:border-warning-300 hover:text-warning-700'}`}>
+            👻 Hide stale
+          </button>
           <button
-            onClick={() => { setSearch(''); setLocFilter('') }}
-            className="px-2.5 py-1 rounded-full text-xs border border-ink-200 text-ink-400 hover:text-danger-500 hover:border-danger-200 transition-colors ml-auto">
+            onClick={() => { setSearch(''); setLocFilter(''); setHideStale(false) }}
+            className="px-2.5 py-1 rounded-full text-xs border border-ink-200 text-ink-400 hover:text-danger-500 hover:border-danger-200 transition-colors">
             Clear all
           </button>
         </div>

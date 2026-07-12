@@ -55,7 +55,12 @@ export function parseJobsFromMarkdown(md) {
       const rCol = findCol(headers, 'role', 'position', 'title', 'job', 'internship')
       const lCol = findCol(headers, 'location', 'where', 'office')
       const aCol = findCol(headers, 'application', 'apply', 'link', 'url', 'job link')
-      const dCol = findCol(headers, 'date', 'posted', 'added', 'deadline', 'closes')
+      // 'age' matches boards that show a relative "5d"/"17d" column instead of an
+      // absolute date (e.g. speedyapply/2027-SWE-College-Jobs, this project's actual
+      // primary source — its "Posting" column is just an apply-button image, the real
+      // signal is the separate "Age" column). parseJobDate() in helpers.js handles
+      // both formats.
+      const dCol = findCol(headers, 'date', 'posted', 'added', 'deadline', 'closes', 'age')
       const nCol = findCol(headers, 'notes', 'status', 'active', 'open', 'comments')
 
       while (i < lines.length && lines[i].trim().startsWith('|')) {
