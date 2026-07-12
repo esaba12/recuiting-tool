@@ -5,11 +5,11 @@ import LogInteractionModal from './LogInteractionModal.jsx'
 
 const TYPE_COLOR = { Email: 'bg-accent-100 text-accent-700', LinkedIn: 'bg-purple-100 text-purple-700', Call: 'bg-success-100 text-success-700', Meeting: 'bg-orange-100 text-orange-700', Other: 'bg-ink-100 text-ink-600' }
 
-export default function ContactDetailModal({ contact, contacts, interactions, onClose, onSaved }) {
+export default function ContactDetailModal({ contact, contacts, interactions, onClose, onSaved, initial = {} }) {
   const isNew = !contact
   const [form, setForm] = useState(() => ({
-    name:        contact?.name || '',
-    company:     contact?.company || '',
+    name:        contact?.name || initial.name || '',
+    company:     contact?.company || initial.company || '',
     role:        contact?.role || '',
     email:       contact?.email || '',
     linkedin:    contact?.linkedin || '',

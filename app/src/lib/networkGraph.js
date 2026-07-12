@@ -6,10 +6,18 @@ export function hexToRgba(hex, alpha) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
 
+// Canonical company key (trim + lowercase) — also used by ReferralCoverageTab.jsx to
+// cross-reference a target-company list against Contacts/Applications, so it stays the
+// one normalization function rather than a 3rd near-duplicate (shared.jsx's
+// findDuplicateGroups has its own Company+Role key, separately).
+export function normalizeCompanyName(name) {
+  return name.trim().toLowerCase()
+}
+
 export function buildGraph(contacts) {
   const nodes = []
   const links = []
-  const companyId = (name) => `company:${name.trim().toLowerCase()}`
+  const companyId = (name) => `company:${normalizeCompanyName(name)}`
   const seenCompanies = new Set()
 
   contacts.forEach(c => {

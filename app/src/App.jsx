@@ -13,17 +13,19 @@ import ActionsTab from './components/ActionsTab.jsx'
 import CalendarTab from './components/CalendarTab.jsx'
 import GitHubTab from './components/jobBoards/GitHubTab.jsx'
 import AddToCalendarModal from './components/AddToCalendarModal.jsx'
-import { Table2, LayoutGrid, Share2 } from 'lucide-react'
+import ReferralCoverageTab from './components/ReferralCoverageTab.jsx'
+import { Table2, LayoutGrid, Share2, Target } from 'lucide-react'
 
 // ── Network Tab ───────────────────────────────────────────────────────────────
 
 const NETWORK_VIEWS = [
-  { key: 'table',  label: 'Table',  icon: Table2 },
-  { key: 'cards',  label: 'Cards',  icon: LayoutGrid },
-  { key: 'graph',  label: 'Graph',  icon: Share2 },
+  { key: 'table',    label: 'Table',    icon: Table2 },
+  { key: 'cards',    label: 'Cards',    icon: LayoutGrid },
+  { key: 'graph',    label: 'Graph',    icon: Share2 },
+  { key: 'coverage', label: 'Coverage', icon: Target },
 ]
 
-function NetworkTab({ contacts, interactions, onRefresh, initialView = 'table' }) {
+function NetworkTab({ contacts, apps, interactions, onRefresh, initialView = 'table' }) {
   const [filter, setFilter]   = useState('ALL')
   const [search, setSearch]   = useState('')
   const [view, setView]       = useState(initialView) // 'table' | 'cards' | 'graph'
@@ -83,7 +85,9 @@ function NetworkTab({ contacts, interactions, onRefresh, initialView = 'table' }
         </div>
       </div>
 
-      {view === 'graph'
+      {view === 'coverage'
+        ? <ReferralCoverageTab contacts={contacts} apps={apps} interactions={interactions} onRefresh={onRefresh} />
+        : view === 'graph'
         ? <NetworkGraphTab contacts={contacts} />
         : filtered.length === 0
         ? <EmptyState msg={contacts.length === 0 ? 'No contacts yet — the email pipeline will add them as recruiting emails come in.' : 'No contacts match this filter.'} />
@@ -218,7 +222,7 @@ export default function App() {
           onOpenGraph={() => { setNetworkInitialView('graph'); setTab('network') }} />
       )}
       {!loading && tab === 'network'  && (
-        <NetworkTab contacts={contacts} interactions={interactions} onRefresh={load} initialView={networkInitialView} />
+        <NetworkTab contacts={contacts} apps={apps} interactions={interactions} onRefresh={load} initialView={networkInitialView} />
       )}
       {!loading && tab === 'pipeline' && <PipelineTab apps={apps} onRefresh={load} />}
       {!loading && tab === 'actions'  && <ActionsTab contacts={contacts} apps={apps} />}
