@@ -152,6 +152,9 @@ export async function fetchContacts() {
     followUpDraftKind: sel(p.properties['Follow-Up Draft Kind']),
     isUMichAlum:     bool(p.properties['Is UMich Alum']),
     affinity:        multiSel(p.properties['Notable Affinity']),
+    wantsToSchedule: bool(p.properties['Wants To Schedule']),
+    scheduleBy:      date(p.properties['Schedule By']),
+    scheduleNote:    str(p.properties['Schedule Note']),
   }))
   const byId = Object.fromEntries(contacts.map(c => [c.id, c]))
   return contacts.map(c => ({ ...c, referredByName: c.referredById ? (byId[c.referredById]?.name || null) : null }))
@@ -178,6 +181,9 @@ export async function updateContact(id, fields) {
   if ('followUpDraftKind' in fields) properties['Follow-Up Draft Kind'] = fields.followUpDraftKind ? { select: { name: fields.followUpDraftKind } } : { select: null }
   if ('isUMichAlum' in fields) properties['Is UMich Alum']   = { checkbox: !!fields.isUMichAlum }
   if ('affinity' in fields)    properties['Notable Affinity'] = { multi_select: (fields.affinity || []).map(name => ({ name })) }
+  if ('wantsToSchedule' in fields) properties['Wants To Schedule'] = { checkbox: !!fields.wantsToSchedule }
+  if ('scheduleBy' in fields)      properties['Schedule By']       = { date: fields.scheduleBy ? { start: fields.scheduleBy } : null }
+  if ('scheduleNote' in fields)    properties['Schedule Note']     = { rich_text: [{ text: { content: fields.scheduleNote || '' } }] }
   return notionPatch(`/pages/${id}`, { properties })
 }
 

@@ -26,8 +26,9 @@ function weekStart(d) {
 
 // ── Overview Tab ──────────────────────────────────────────────────────────────
 
-export default function OverviewTab({ contacts, apps, interactions = [], onOpenGraph }) {
+export default function OverviewTab({ contacts, apps, interactions = [], onOpenGraph, onOpenActions }) {
   const reviewQueue  = apps.filter(a => a.triage === 'Needs Review' && a.stage === 'Wishlist')
+  const scheduleQueue = contacts.filter(c => c.wantsToSchedule)
   const triagedApps  = apps.filter(a => !isUntriaged(a))
   const activeApps   = triagedApps.filter(a => !TERMINAL_STAGES.includes(a.stage))
   const interviews   = triagedApps.filter(a => INTERVIEW_STAGES.includes(a.stage))
@@ -85,6 +86,16 @@ export default function OverviewTab({ contacts, apps, interactions = [], onOpenG
             <strong>{reviewQueue.length}</strong> job{reviewQueue.length !== 1 ? 's' : ''} imported from your boards {reviewQueue.length !== 1 ? 'are' : 'is'} waiting for review.
           </p>
           <span className="text-xs text-warning-600 shrink-0">Sort them in Job Boards → Needs Review</span>
+        </div>
+      )}
+
+      {scheduleQueue.length > 0 && (
+        <div onClick={onOpenActions}
+          className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 flex items-center justify-between gap-3 cursor-pointer hover:border-indigo-300">
+          <p className="text-sm text-indigo-800">
+            <strong>{scheduleQueue.length}</strong> {scheduleQueue.length !== 1 ? 'people' : 'person'} you want to schedule with {scheduleQueue.length !== 1 ? "haven't" : "hasn't"} been set up yet.
+          </p>
+          <span className="text-xs text-indigo-600 shrink-0">Go to Actions →</span>
         </div>
       )}
 

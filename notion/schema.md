@@ -29,6 +29,9 @@ Quick reference for all 5 databases. Full setup instructions in `plans/phase-1-n
 | Follow-Up Draft Kind | Select | `Cold Open` / `Follow-Up` |
 | Is UMich Alum | Checkbox | Fast one-click signal — kept in sync with `Notable Affinity` containing `UMich` (toggling either updates both). Added by `notion/add-affinity-fields.js`. Distinct from `Role`'s `Alumni` option, which describes this contact's *relationship type* to you (mutually exclusive with e.g. `SWE`) — this describes a *shared background*, which a SWE at a target company can also have. |
 | Notable Affinity | Multi-select | `UMich` / `Same Hometown` / `Shared Club/Activity` / `Warm Intro`. Feeds `lib/affinity.js`'s `affinityScore()`, used by the Referral Coverage tab to rank moderately-weak ties above both cold contacts and over-relied-on strong ties — see that file's comment for the research citation (Rajkumar et al., Science 2022). |
+| Wants To Schedule | Checkbox | Set via the sidebar "+ Schedule" quick-add (`QuickScheduleModal.jsx`) or manually on the contact. Surfaced as a standing reminder in Actions ("Want to Schedule") and an Overview nudge until unchecked — independent of `Status`/`Follow-Up Date`, since this is "get something on the calendar" intent rather than a post-interaction follow-up. Added by `notion/add-schedule-fields.js`. |
+| Schedule By | Date | Optional target date for the reminder above; defaults to +7 days in the quick-add flow. Contacts with no date sort last in the Actions queue, not first. |
+| Schedule Note | Text | Freeform context on why/what to discuss, shown inline in the Actions queue row. |
 
 ---
 
