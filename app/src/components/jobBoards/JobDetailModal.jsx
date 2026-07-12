@@ -1,10 +1,12 @@
 import { useState } from 'react'
-import { BUCKET_CONFIG, BUCKET_ACTIVE, generateJobAnalysis } from './helpers.js'
+import { BUCKET_CONFIG, BUCKET_ACTIVE, generateJobAnalysis, jobAgeDays, isGhostJob } from './helpers.js'
 
 export default function JobDetailModal({ job, status, onStatusChange, onClose, prefs }) {
   const [analysis, setAnalysis]       = useState(null)
   const [aiLoading, setAiLoading]     = useState(false)
   const [aiError, setAiError]         = useState(null)
+  const ageDays = jobAgeDays(job)
+  const stale = isGhostJob(job)
 
   async function doAnalysis() {
     setAiLoading(true); setAiError(null)
@@ -30,7 +32,17 @@ export default function JobDetailModal({ job, status, onStatusChange, onClose, p
           <div className="flex items-center gap-3 mt-3 flex-wrap text-xs text-ink-500">
             {job.location  && <span>📍 {job.location}</span>}
             {job.dateAdded && <span>📅 {job.dateAdded}</span>}
+            {stale && (
+              <span className="px-1.5 py-0.5 rounded-full bg-warning-100 text-warning-800 text-[10px] font-medium">
+                👻 No update in {ageDays}d
+              </span>
+            )}
           </div>
+          {stale && (
+            <p className="text-[11px] text-warning-700 mt-1.5">
+              27-48% of tech postings show ghost-job characteristics — this one's been stale a while. Worth a quick check before spending an application on it.
+            </p>
+          )}
           <div className="flex items-center gap-2 mt-3">
             {job.applyUrl && (
               <a href={job.applyUrl} target="_blank" rel="noreferrer"

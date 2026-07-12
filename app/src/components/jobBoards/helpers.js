@@ -65,15 +65,44 @@ export function jobId(job) {
   return `${job.company}::${job.role}`.replace(/[^\w:]/g, '_').slice(0, 80)
 }
 
+const AGE_UNIT_MS = { h: 3600000, d: 86400000, w: 7 * 86400000, mo: 30 * 86400000, y: 365 * 86400000 }
+
 export function parseJobDate(str) {
   if (!str || /^[-—\s]+$/.test(str)) return null
   if (/^\d{4}-\d{2}-\d{2}/.test(str)) return new Date(str)
+  // Relative-age strings some boards use instead of an absolute date (e.g. "5d", "17d",
+  // "3w", "2mo") — approximate, but far better than treating every row as unparseable.
+  const ageM = str.match(/^(\d+)\s*(mo|[hdwy])$/i)
+  if (ageM) return new Date(Date.now() - Number(ageM[1]) * AGE_UNIT_MS[ageM[2].toLowerCase()])
   const m = str.match(/^([A-Za-z]{3,})\s+(\d{1,2})(?:,?\s*(\d{4}))?/)
   if (m) {
     const mo = MONTH_NAMES.findIndex(n => n.toLowerCase() === m[1].slice(0,3).toLowerCase())
     if (mo >= 0) return new Date(m[3] ? +m[3] : new Date().getFullYear(), mo, +m[2])
   }
   return null
+}
+
+// 27-48% of tech-sector postings show ghost-job characteristics (posted with no real
+// intent to hire); 45+ days stale with no update is the strongest publicly-available
+// signal (Forbes/LinkedIn analysis, ResuFit, Clarify Capital 2026 study). This threshold
+// is a heuristic, not a certainty — flag/demote, never silently exclude from import,
+// since a false positive during a time-pressured recruiting season would hide a real
+// posting. `job.dateAdded` is unreliable by construction (github.js's column matcher
+// doesn't distinguish "posted" from "deadline/closes" columns, and parseJobDate only
+// handles ISO/"Mon D[, YYYY]" formats) — jobAgeDays returns null for anything it can't
+// parse, and callers must treat null as "unknown age," not "fresh."
+export const GHOST_JOB_THRESHOLD_DAYS = 45
+
+export function jobAgeDays(job) {
+  const posted = parseJobDate(job.dateAdded)
+  if (!posted) return null
+  return Math.floor((Date.now() - posted.getTime()) / 86400000)
+}
+
+export function isGhostJob(job) {
+  if (job.status === 'closed') return false
+  const age = jobAgeDays(job)
+  return age !== null && age >= GHOST_JOB_THRESHOLD_DAYS
 }
 
 export async function generateJobAnalysis(job, prefs) {

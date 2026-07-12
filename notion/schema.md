@@ -86,6 +86,8 @@ Universal touchpoint ledger — every email, LinkedIn message, call, or meeting 
 | Days in Stage | Formula | `dateBetween(now(), prop("Applied Date"), "days")` |
 | Follow-Up Due | Formula | `dateAdd(prop("Applied Date"), 7, "days")` |
 
+**Not stored here:** ghost-job staleness (`jobBoards/helpers.js`'s `isGhostJob()`/`jobAgeDays()`) is computed client-side on the raw pre-import GitHub listing (`job.dateAdded`), not persisted — `addApplication()`'s `datePosted` param only ever gets stringified into `Notes` (`Posted <text>`), there's no real Date property capturing it. A stale badge only shows in the Job Boards tab, pre- and post-import; it doesn't survive as a queryable Notion field. A `Date Posted` (Date) property + parsing `job.dateAdded` through `parseJobDate()` at import time would be needed for that — flagged as a fast-follow, not required for the MVP.
+
 ---
 
 ## LC Problems DB
