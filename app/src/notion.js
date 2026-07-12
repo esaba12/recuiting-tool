@@ -28,6 +28,8 @@ function sel(prop)  { return prop?.select?.name || '' }
 function date(prop) { return prop?.date?.start || null }
 function url(prop)  { return prop?.url || null }
 function num(prop)  { return prop?.formula?.number ?? prop?.number ?? null }
+function bool(prop) { return prop?.checkbox || false }
+function multiSel(prop) { return (prop?.multi_select || []).map(o => o.name) }
 
 async function notionPost(path, body) {
   const res = await fetch(`/notion/v1${path}`, {
@@ -148,6 +150,8 @@ export async function fetchContacts() {
     followUpDraft:     str(p.properties['Follow-Up Draft']),
     followUpDraftTier: num(p.properties['Follow-Up Draft Tier']),
     followUpDraftKind: sel(p.properties['Follow-Up Draft Kind']),
+    isUMichAlum:     bool(p.properties['Is UMich Alum']),
+    affinity:        multiSel(p.properties['Notable Affinity']),
   }))
   const byId = Object.fromEntries(contacts.map(c => [c.id, c]))
   return contacts.map(c => ({ ...c, referredByName: c.referredById ? (byId[c.referredById]?.name || null) : null }))
@@ -172,6 +176,8 @@ export async function updateContact(id, fields) {
   if ('followUpDraft' in fields)     properties['Follow-Up Draft']      = { rich_text: [{ text: { content: fields.followUpDraft || '' } }] }
   if ('followUpDraftTier' in fields) properties['Follow-Up Draft Tier'] = { number: fields.followUpDraftTier ?? null }
   if ('followUpDraftKind' in fields) properties['Follow-Up Draft Kind'] = fields.followUpDraftKind ? { select: { name: fields.followUpDraftKind } } : { select: null }
+  if ('isUMichAlum' in fields) properties['Is UMich Alum']   = { checkbox: !!fields.isUMichAlum }
+  if ('affinity' in fields)    properties['Notable Affinity'] = { multi_select: (fields.affinity || []).map(name => ({ name })) }
   return notionPatch(`/pages/${id}`, { properties })
 }
 

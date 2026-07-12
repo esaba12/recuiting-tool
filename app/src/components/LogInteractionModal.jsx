@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Phone, MessageCircle, Users, Mail, MoreHorizontal } from 'lucide-react'
-import { searchContactByName, addContact, addCallEntry, addInteraction } from '../notion.js'
+import { searchContactByName, addContact, addCallEntry, addInteraction, updateContact } from '../notion.js'
 import { claudeJSON, CLAUDE_MODELS } from '../lib/claude.js'
+import { AFFINITY_OPTIONS } from '../shared.jsx'
 import Modal from './ui/Modal.jsx'
 import Button from './ui/Button.jsx'
 import Tabs from './ui/Tabs.jsx'
@@ -31,7 +32,8 @@ async function extractWithClaude(channel, text) {
   "summary": "3-sentence summary of the conversation",
   "key_insights": "what they shared about company culture, role, process, or advice",
   "my_commitments": "what I said I would do next — or null",
-  "follow_up_draft": "A warm 3-4 sentence follow-up email from the candidate (a CS student targeting SWE internships)"
+  "follow_up_draft": "A warm 3-4 sentence follow-up email from the candidate (a CS student targeting SWE internships)",
+  "notable_affinity_detected": "comma-separated subset of UMich, Same Hometown, Shared Club/Activity, Warm Intro — only if EXPLICITLY mentioned in the transcript, do not guess. Or null."
 }
 
 Call summary / transcript:
@@ -43,7 +45,8 @@ ${text}`
   "contact_company": "their company or null",
   "contact_role": "their job title or type: SWE|PM|Recruiter|Alumni|Referral|Other",
   "summary": "2-3 sentence summary of what was discussed",
-  "key_points": "anything notable they offered (referral, intro, advice) — or null"
+  "key_points": "anything notable they offered (referral, intro, advice) — or null",
+  "notable_affinity_detected": "comma-separated subset of UMich, Same Hometown, Shared Club/Activity, Warm Intro — only if EXPLICITLY mentioned in the conversation, do not guess. Or null."
 }
 
 LinkedIn conversation:
@@ -78,6 +81,12 @@ export default function LogInteractionModal({ contacts = [], contact = null, onC
   const nameMatches = name.trim().length > 1
     ? contacts.filter(c => c.name.toLowerCase().includes(name.toLowerCase())).slice(0, 5)
     : []
+
+  const affinityTags = (field('notable_affinity_detected') || '').split(',').map(s => s.trim()).filter(Boolean)
+  function toggleAffinityTag(tag) {
+    const next = affinityTags.includes(tag) ? affinityTags.filter(t => t !== tag) : [...affinityTags, tag]
+    setField('notable_affinity_detected', next.join(', '))
+  }
 
   function switchChannel(key) {
     setChannel(key)
@@ -115,6 +124,9 @@ export default function LogInteractionModal({ contacts = [], contact = null, onC
           summary: field('summary'), keyInsights: field('key_insights'),
           commitments: field('my_commitments'), followUpDraft: field('follow_up_draft'),
         })
+      }
+      if (affinityTags.length > 0) {
+        await updateContact(contactId, { affinity: affinityTags, isUMichAlum: affinityTags.includes('UMich') })
       }
       await addInteraction({
         contactId, contactName, type: CHANNEL_TO_TYPE[channel], direction: 'N/A',
@@ -199,6 +211,19 @@ export default function LogInteractionModal({ contacts = [], contact = null, onC
                           className="w-full px-2.5 py-1.5 border border-ink-200 rounded-lg text-sm focus:outline-none focus:border-accent-400" />
                       </div>
                     ))}
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-ink-100">
+                    <p className="text-xs text-ink-400 mb-1.5">Notable affinity (auto-detected, review before saving)</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {AFFINITY_OPTIONS.map(tag => (
+                        <button key={tag} type="button" onClick={() => toggleAffinityTag(tag)}
+                          className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${affinityTags.includes(tag)
+                            ? 'bg-accent-600 text-white border-accent-600'
+                            : 'bg-white text-ink-500 border-ink-200 hover:border-accent-300'}`}>
+                          {tag}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
 

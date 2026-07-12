@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { addContact, updateContact, archiveContact } from '../notion.js'
-import { ROLE_OPTIONS, SOURCE_OPTIONS, STATUS_OPTIONS, URGENCY_OPTIONS, Badge, fmt } from '../shared.jsx'
+import { ROLE_OPTIONS, SOURCE_OPTIONS, STATUS_OPTIONS, URGENCY_OPTIONS, AFFINITY_OPTIONS, Badge, fmt } from '../shared.jsx'
 import LogInteractionModal from './LogInteractionModal.jsx'
 import DraftPanel from './DraftPanel.jsx'
 
@@ -21,6 +21,8 @@ export default function ContactDetailModal({ contact, contacts, interactions, on
     whatTheyDid: contact?.whatTheyDid || '',
     notes:       contact?.notes || '',
     followUpDate: contact?.followUpDate ? contact.followUpDate.slice(0, 10) : '',
+    isUMichAlum: contact?.isUMichAlum || false,
+    affinity:    contact?.affinity || [],
   }))
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -29,6 +31,22 @@ export default function ContactDetailModal({ contact, contacts, interactions, on
   const [draftOpen, setDraftOpen] = useState(false)
 
   const set = (key, val) => setForm(f => ({ ...f, [key]: val }))
+
+  // Keeps the checkbox and the multi-select in sync in both directions — toggling either
+  // one updates 'UMich' in the other, so they never drift apart.
+  function toggleUMichAlum() {
+    setForm(f => {
+      const next = !f.isUMichAlum
+      return { ...f, isUMichAlum: next, affinity: next ? [...new Set([...f.affinity, 'UMich'])] : f.affinity.filter(a => a !== 'UMich') }
+    })
+  }
+  function toggleAffinity(tag) {
+    setForm(f => {
+      const has = f.affinity.includes(tag)
+      const affinity = has ? f.affinity.filter(a => a !== tag) : [...f.affinity, tag]
+      return { ...f, affinity, isUMichAlum: tag === 'UMich' ? !has : f.isUMichAlum }
+    })
+  }
 
   const history = (interactions || [])
     .filter(i => i.contactId === contact?.id)
@@ -48,6 +66,7 @@ export default function ContactDetailModal({ contact, contacts, interactions, on
           linkedin: form.linkedin, source: form.source || null, status: form.status, urgency: form.urgency,
           referredById: form.referredById || null, whatTheyDid: form.whatTheyDid, notes: form.notes,
           followUpDate: form.followUpDate || null,
+          isUMichAlum: form.isUMichAlum, affinity: form.affinity,
         })
       }
       onSaved()
@@ -125,6 +144,25 @@ export default function ContactDetailModal({ contact, contacts, interactions, on
                 <label className="block text-xs text-ink-400 mb-0.5">Follow-Up Date</label>
                 <input type="date" value={form.followUpDate} onChange={e => set('followUpDate', e.target.value)}
                   className="w-full px-2.5 py-1.5 border border-ink-200 rounded-lg text-sm focus:outline-none focus:border-accent-400" />
+              </div>
+            </div>
+          )}
+
+          {!isNew && (
+            <div className="pt-3 border-t border-ink-100">
+              <label className="flex items-center gap-2 text-xs text-ink-600 mb-2 cursor-pointer">
+                <input type="checkbox" checked={form.isUMichAlum} onChange={toggleUMichAlum} className="rounded border-ink-300" />
+                🎓 UMich alum <span className="text-ink-400 font-normal">— the single warmest cold-outreach signal available</span>
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {AFFINITY_OPTIONS.map(tag => (
+                  <button key={tag} type="button" onClick={() => toggleAffinity(tag)}
+                    className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${form.affinity.includes(tag)
+                      ? 'bg-accent-600 text-white border-accent-600'
+                      : 'bg-white text-ink-500 border-ink-200 hover:border-accent-300'}`}>
+                    {tag}
+                  </button>
+                ))}
               </div>
             </div>
           )}
