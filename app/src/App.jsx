@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { fetchContacts, fetchApplications, fetchInteractions } from './notion.js'
-import { STATUS_COLOR, URGENCY_COLOR, daysSince, daysUntil, fmt, Badge, EmptyState, isOverdue } from './shared.jsx'
+import { STATUS_COLOR, URGENCY_COLOR, REFERRAL_STATUS_COLOR, daysSince, daysUntil, fmt, Badge, EmptyState, isOverdue } from './shared.jsx'
 import { statusIconFor, URGENCY_ICON } from './lib/icons.js'
 import AppShell from './components/layout/AppShell.jsx'
 import ContactDetailModal from './components/ContactDetailModal.jsx'
@@ -113,6 +113,7 @@ function NetworkTab({ contacts, apps, interactions, onRefresh, initialView = 'ta
                         <Badge label={c.status} color={STATUS_COLOR[c.status]} icon={statusIconFor(c.status)} />
                         {c.urgency && c.urgency !== 'LOW' && <Badge label={c.urgency} color={URGENCY_COLOR[c.urgency]} icon={URGENCY_ICON[c.urgency]} />}
                         {c.referredByName && <Badge label={`↩ ${c.referredByName}`} color="bg-indigo-50 text-indigo-600" />}
+                        {c.referralStatus && c.referralStatus !== 'Not Asked' && <Badge label={c.referralStatus} color={REFERRAL_STATUS_COLOR[c.referralStatus]} />}
                         {c.email && (
                           <a href={`mailto:${c.email}`} onClick={e => e.stopPropagation()} className="text-xs text-accent-500 hover:underline">{c.email}</a>
                         )}

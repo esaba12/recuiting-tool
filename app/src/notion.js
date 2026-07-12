@@ -155,6 +155,7 @@ export async function fetchContacts() {
     wantsToSchedule: bool(p.properties['Wants To Schedule']),
     scheduleBy:      date(p.properties['Schedule By']),
     scheduleNote:    str(p.properties['Schedule Note']),
+    referralStatus:  sel(p.properties['Referral Status']) || 'Not Asked',
   }))
   const byId = Object.fromEntries(contacts.map(c => [c.id, c]))
   return contacts.map(c => ({ ...c, referredByName: c.referredById ? (byId[c.referredById]?.name || null) : null }))
@@ -184,6 +185,7 @@ export async function updateContact(id, fields) {
   if ('wantsToSchedule' in fields) properties['Wants To Schedule'] = { checkbox: !!fields.wantsToSchedule }
   if ('scheduleBy' in fields)      properties['Schedule By']       = { date: fields.scheduleBy ? { start: fields.scheduleBy } : null }
   if ('scheduleNote' in fields)    properties['Schedule Note']     = { rich_text: [{ text: { content: fields.scheduleNote || '' } }] }
+  if ('referralStatus' in fields)  properties['Referral Status']   = fields.referralStatus ? { select: { name: fields.referralStatus } } : { select: null }
   return notionPatch(`/pages/${id}`, { properties })
 }
 

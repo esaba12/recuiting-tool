@@ -3,7 +3,7 @@ import {
   useReactTable, getCoreRowModel, getSortedRowModel, getFilteredRowModel,
   flexRender, createColumnHelper,
 } from '@tanstack/react-table'
-import { STATUS_COLOR, URGENCY_COLOR, Badge, fmt, daysUntil } from '../shared.jsx'
+import { STATUS_COLOR, URGENCY_COLOR, REFERRAL_STATUS_COLOR, Badge, fmt, daysUntil } from '../shared.jsx'
 import { statusIconFor, URGENCY_ICON } from '../lib/icons.js'
 
 const col = createColumnHelper()
@@ -31,6 +31,7 @@ export default function ContactsTable({ contacts, onEdit }) {
           {info.getValue()}
           {info.row.original.isUMichAlum && <span title="UMich alum" className="ml-1">🎓</span>}
           {info.row.original.wantsToSchedule && <span title="Want to schedule" className="ml-1">📅</span>}
+          {info.row.original.referralStatus === 'Confirmed' && <span title="Referral confirmed" className="ml-1">🎁</span>}
         </span>
       ),
     }),
@@ -62,6 +63,11 @@ export default function ContactsTable({ contacts, onEdit }) {
     col.accessor('referredByName', {
       header: 'Referred By',
       cell: info => info.getValue() || '—',
+    }),
+    col.accessor('referralStatus', {
+      header: 'Referral',
+      cell: info => <Badge label={info.getValue()} color={REFERRAL_STATUS_COLOR[info.getValue()]} />,
+      filterFn: 'equalsString',
     }),
     col.accessor('lastInteraction', {
       header: 'Last',
@@ -120,7 +126,7 @@ export default function ContactsTable({ contacts, onEdit }) {
                       onChange={e => h.column.setFilterValue(e.target.value || undefined)}
                       className="w-full mt-1 px-1.5 py-1 border border-ink-200 rounded text-[11px] focus:outline-none focus:border-accent-400" />
                   )}
-                  {['role','status','source','urgency'].includes(h.column.id) && (
+                  {['role','status','source','urgency','referralStatus'].includes(h.column.id) && (
                     <FacetFilter column={h.column} options={uniq(h.column.id)} />
                   )}
                 </th>

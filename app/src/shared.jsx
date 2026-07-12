@@ -17,6 +17,16 @@ export const URGENCY_COLOR = {
   LOW:  'bg-ink-100 text-ink-400',
 }
 
+// Whether this contact is going to give (or has given) a referral for a job
+// application — distinct from ROLE_OPTIONS's 'Referral' (their relationship type
+// to you) and 'Referred By' (who introduced *you* to this contact).
+export const REFERRAL_STATUS_COLOR = {
+  'Not Asked': 'bg-ink-100 text-ink-400',
+  'Asked':     'bg-warning-100 text-warning-800',
+  'Confirmed': 'bg-success-100 text-success-800',
+  'Declined':  'bg-danger-100 text-danger-600',
+}
+
 export const STAGE_ORDER = ['Wishlist','Applied','Phone Screen','Technical','Onsite','Offer','Accepted','Rejected']
 
 export const STAGE_COLOR = {
@@ -40,6 +50,7 @@ export const URGENCY_OPTIONS = ['HIGH','MED','LOW']
 // Shared-background signals, distinct from ROLE_OPTIONS's 'Alumni' (which describes this
 // contact's relationship *type* to you, not a background they happen to share with you).
 export const AFFINITY_OPTIONS = ['UMich','Same Hometown','Shared Club/Activity','Warm Intro']
+export const REFERRAL_STATUS_OPTIONS = Object.keys(REFERRAL_STATUS_COLOR)
 
 export function daysSince(d) {
   if (!d) return null

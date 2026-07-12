@@ -22,6 +22,7 @@ Quick reference for all 5 databases. Full setup instructions in `plans/phase-1-n
 | Linked Calls | Relation | → Calls DB |
 | Linked Applications | Relation | → Applications DB |
 | Referred By | Relation | → Contacts DB (self) — who introduced/referred you to this contact |
+| Referral Status | Select | `Not Asked` / `Asked` / `Confirmed` / `Declined` — whether this contact is giving *you* a referral for a job application. Distinct from `Referred By` (who introduced you to them) and `Role`'s `Referral` option (their relationship type to you). Added by `notion/add-referral-status-field.js`. |
 | Notes | Text | |
 | Exa Enriched | Checkbox | Checked after Exa enrichment runs |
 | Follow-Up Draft | Text | Persisted current draft (cold-open or follow-up), written by the outreach drafting subsystem (`lib/drafting.js` + `DraftPanel.jsx`). Added by `notion/add-followup-fields.js`. |

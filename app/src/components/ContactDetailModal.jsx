@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { addContact, updateContact, archiveContact } from '../notion.js'
-import { ROLE_OPTIONS, SOURCE_OPTIONS, STATUS_OPTIONS, URGENCY_OPTIONS, AFFINITY_OPTIONS, Badge, fmt } from '../shared.jsx'
+import { ROLE_OPTIONS, SOURCE_OPTIONS, STATUS_OPTIONS, URGENCY_OPTIONS, AFFINITY_OPTIONS, REFERRAL_STATUS_OPTIONS, Badge, fmt } from '../shared.jsx'
 import LogInteractionModal from './LogInteractionModal.jsx'
 import DraftPanel from './DraftPanel.jsx'
 
@@ -18,6 +18,7 @@ export default function ContactDetailModal({ contact, contacts, interactions, on
     status:      contact?.status || '🟡 Cooling',
     urgency:     contact?.urgency || 'LOW',
     referredById: contact?.referredById || '',
+    referralStatus: contact?.referralStatus || 'Not Asked',
     whatTheyDid: contact?.whatTheyDid || '',
     notes:       contact?.notes || '',
     followUpDate: contact?.followUpDate ? contact.followUpDate.slice(0, 10) : '',
@@ -67,7 +68,7 @@ export default function ContactDetailModal({ contact, contacts, interactions, on
         await updateContact(contact.id, {
           name: form.name, company: form.company, role: form.role || null, email: form.email,
           linkedin: form.linkedin, source: form.source || null, status: form.status, urgency: form.urgency,
-          referredById: form.referredById || null, whatTheyDid: form.whatTheyDid, notes: form.notes,
+          referredById: form.referredById || null, referralStatus: form.referralStatus, whatTheyDid: form.whatTheyDid, notes: form.notes,
           followUpDate: form.followUpDate || null,
           isUMichAlum: form.isUMichAlum, affinity: form.affinity,
           wantsToSchedule: form.wantsToSchedule, scheduleBy: form.scheduleBy || null, scheduleNote: form.scheduleNote,
@@ -144,6 +145,7 @@ export default function ContactDetailModal({ contact, contacts, interactions, on
                   {referralOptions.map(c => <option key={c.id} value={c.id}>{c.name}{c.company ? ` @ ${c.company}` : ''}</option>)}
                 </select>
               </div>
+              {select('Referral Status', 'referralStatus', REFERRAL_STATUS_OPTIONS)}
               <div>
                 <label className="block text-xs text-ink-400 mb-0.5">Follow-Up Date</label>
                 <input type="date" value={form.followUpDate} onChange={e => set('followUpDate', e.target.value)}
