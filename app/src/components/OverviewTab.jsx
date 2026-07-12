@@ -1,4 +1,4 @@
-import { STATUS_COLOR, TERMINAL_STAGES, INTERVIEW_STAGES, daysSince, daysUntil, isUntriaged } from '../shared.jsx'
+import { STATUS_COLOR, TERMINAL_STAGES, INTERVIEW_STAGES, daysSince, daysUntil, isUntriaged, isOverdue } from '../shared.jsx'
 import BarChartWrapper from './charts/BarChart.jsx'
 import DonutChart from './charts/DonutChart.jsx'
 import TrendChart from './charts/TrendChart.jsx'
@@ -34,9 +34,8 @@ export default function OverviewTab({ contacts, apps, interactions = [], onOpenG
   const offers       = triagedApps.filter(a => a.stage === 'Offer')
   const warmContacts = contacts.filter(c => c.status === '🟢 Warm')
 
-  const overdueContacts = contacts.filter(c =>
-    c.status !== '✅ Closed' && c.followUpDate && daysUntil(c.followUpDate) <= 0
-  ).sort((a, b) => daysUntil(a.followUpDate) - daysUntil(b.followUpDate))
+  const overdueContacts = contacts.filter(isOverdue)
+    .sort((a, b) => daysUntil(a.followUpDate) - daysUntil(b.followUpDate))
 
   const staleApps = activeApps.filter(a => {
     const d = a.daysInStage ?? daysSince(a.lastActivity)

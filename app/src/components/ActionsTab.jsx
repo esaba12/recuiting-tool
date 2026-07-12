@@ -1,10 +1,10 @@
-import { STATUS_COLOR, URGENCY_COLOR, STAGE_COLOR, TERMINAL_STAGES, daysSince, daysUntil, fmt, Badge, EmptyState, isUntriaged } from '../shared.jsx'
+import { STATUS_COLOR, URGENCY_COLOR, STAGE_COLOR, TERMINAL_STAGES, daysSince, daysUntil, fmt, Badge, EmptyState, isUntriaged, isOverdue } from '../shared.jsx'
 
 export default function ActionsTab({ contacts, apps }) {
   const activeApps = apps.filter(a => !TERMINAL_STAGES.includes(a.stage) && !isUntriaged(a))
 
   const overdueContacts = contacts
-    .filter(c => c.status !== '✅ Closed' && c.followUpDate && daysUntil(c.followUpDate) <= 0)
+    .filter(isOverdue)
     .sort((a, b) => daysUntil(a.followUpDate) - daysUntil(b.followUpDate))
 
   const staleApps = activeApps

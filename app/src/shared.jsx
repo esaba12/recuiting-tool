@@ -53,6 +53,14 @@ export function fmt(d) {
   return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
+// A contact whose Follow-Up Date has passed with no newer touch recorded — the single
+// source of truth for "needs a follow-up," used by Actions, Overview, the sidebar badge,
+// and the Network Cards view (which previously computed this without the status guard,
+// so a ✅ Closed contact with a stale date still showed a red overdue border).
+export function isOverdue(c) {
+  return c.status !== '✅ Closed' && !!c.followUpDate && daysUntil(c.followUpDate) <= 0
+}
+
 // A bulk-imported job board listing that hasn't been triaged yet (still sitting untouched
 // in the review queue), or one the user explicitly passed on — excluded from
 // Overview/Pipeline/Actions "active" stats so a big board import doesn't drown out real activity.

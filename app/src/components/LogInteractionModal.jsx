@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Phone, MessageCircle, Users, Mail, MoreHorizontal } from 'lucide-react'
 import { searchContactByName, addContact, addCallEntry, addInteraction } from '../notion.js'
+import { claudeJSON, CLAUDE_MODELS } from '../lib/claude.js'
 import Modal from './ui/Modal.jsx'
 import Button from './ui/Button.jsx'
 import Tabs from './ui/Tabs.jsx'
@@ -48,19 +49,7 @@ ${text}`
 LinkedIn conversation:
 ${text}`
 
-  const res = await fetch('/claude-api/v1/messages', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1000, messages: [{ role: 'user', content: prompt }] }),
-  })
-  if (!res.ok) {
-    const e = await res.json().catch(() => ({}))
-    throw new Error(e.error?.message || `API ${res.status}`)
-  }
-  const data = await res.json()
-  const match = data.content[0].text.match(/\{[\s\S]*\}/)
-  if (!match) throw new Error('Could not parse response')
-  return JSON.parse(match[0])
+  return claudeJSON({ model: CLAUDE_MODELS.SONNET, content: prompt, maxTokens: 1000 })
 }
 
 export default function LogInteractionModal({ contacts = [], contact = null, onClose, onSaved }) {
