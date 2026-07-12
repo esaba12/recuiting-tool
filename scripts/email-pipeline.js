@@ -263,6 +263,7 @@ function upsertApplication(notionKey, data) {
   const props = {
     'Stage':         { select: { name: stage } },
     'Last Activity': { date: { start: today } },
+    ...(stage === 'Rejected' ? { 'Closed Date': { date: { start: today } } } : {}),
     ...(data.role ? { 'Role': { rich_text: [{ text: { content: data.role } }] } } : {}),
   }
 

@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { archiveApplication, updateApplicationTriage } from '../notion.js'
-import { STAGE_ORDER, STAGE_COLOR, TERMINAL_STAGES, daysSince, fmt, Badge, EmptyState, isUntriaged, findDuplicateGroups } from '../shared.jsx'
+import { STAGE_ORDER, STAGE_COLOR, TERMINAL_STAGES, daysSince, daysBetween, fmt, Badge, EmptyState, isUntriaged, findDuplicateGroups } from '../shared.jsx'
 import { BUCKET_TO_TRIAGE } from './jobBoards/helpers.js'
 import ApplicationDetailModal from './ApplicationDetailModal.jsx'
 
@@ -142,6 +142,11 @@ export default function PipelineTab({ apps, onRefresh }) {
                       </div>
                       <div className="flex items-center gap-3 mt-1 flex-wrap">
                         {a.appliedDate && <span className="text-xs text-ink-400">Applied {fmt(a.appliedDate)}</span>}
+                        {a.closedDate && (
+                          <span className="text-xs text-ink-400">
+                            Closed {fmt(a.closedDate)}{a.appliedDate ? ` (${daysBetween(a.appliedDate, a.closedDate)}d)` : ''}
+                          </span>
+                        )}
                         {days !== null && (
                           <span className={`text-xs ${stale ? 'text-orange-600 font-medium' : 'text-ink-400'}`}>
                             {days}d in stage{stale ? ' ⚠' : ''}

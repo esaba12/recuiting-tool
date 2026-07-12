@@ -81,7 +81,8 @@ Universal touchpoint ledger — every email, LinkedIn message, call, or meeting 
 | Triage | Select | Needs Review / Applying / Maybe / Applied / Pass — set by the Job Boards auto-import, sorted by the user. Rows with Triage=Needs Review or Pass (still at Stage=Wishlist) are excluded from Overview/Pipeline/Actions "active" stats. |
 | Location | Text | From the job board listing |
 | Source Repo | Text | Which GitHub job board README this row was auto-imported from |
-| Applied Date | Date | |
+| Applied Date | Date | When the application was submitted (the "open" date) |
+| Closed Date | Date | When the application reached a terminal outcome (Stage = Rejected/Accepted, the "close" date). Auto-filled alongside Stage by `ApplicationDetailModal.jsx` (app) and `upsertApplication()` (email pipeline, rejections only); editable by hand otherwise. Paired with `Applied Date` to show turnaround time. Added by `notion/add-closed-date-field.js`. |
 | Last Activity | Date | Auto-updated by email pipeline |
 | Recruiter Contact | Relation | → Contacts DB |
 | JD Link | URL | |

@@ -130,6 +130,23 @@ export async function updateApplicationTriage(id, triage, currentStage) {
   return notionPatch(`/pages/${id}`, { properties })
 }
 
+// Patchable field -> Notion property builder for an existing Application. Only include
+// keys you want to change. Auto-filling Closed Date when Stage moves to a terminal value
+// is handled by the caller (ApplicationDetailModal.jsx), not here, so this stays a plain
+// field mapper like updateContact.
+export async function updateApplication(id, fields) {
+  const properties = {}
+  if ('company' in fields)     properties['Company']      = { title: [{ text: { content: fields.company || '' } }] }
+  if ('role' in fields)        properties['Role']          = { rich_text: [{ text: { content: fields.role || '' } }] }
+  if ('location' in fields)    properties['Location']      = { rich_text: [{ text: { content: fields.location || '' } }] }
+  if ('jdLink' in fields)      properties['JD Link']       = { url: fields.jdLink || null }
+  if ('notes' in fields)       properties['Notes']         = { rich_text: [{ text: { content: fields.notes || '' } }] }
+  if ('stage' in fields)       properties['Stage']         = fields.stage ? { select: { name: fields.stage } } : { select: null }
+  if ('appliedDate' in fields) properties['Applied Date']  = { date: fields.appliedDate ? { start: fields.appliedDate } : null }
+  if ('closedDate' in fields)  properties['Closed Date']   = { date: fields.closedDate ? { start: fields.closedDate } : null }
+  return notionPatch(`/pages/${id}`, { properties })
+}
+
 export async function fetchContacts() {
   const pages = await queryDB(CONTACTS_DB)
   const contacts = pages.map(p => ({
@@ -232,6 +249,7 @@ export async function fetchApplications() {
     location:    str(p.properties.Location),
     sourceRepo:  str(p.properties['Source Repo']),
     appliedDate: date(p.properties['Applied Date']),
+    closedDate:  date(p.properties['Closed Date']),
     lastActivity: date(p.properties['Last Activity']),
     daysInStage: num(p.properties['Days in Stage']),
     jdLink:      url(p.properties['JD Link']),

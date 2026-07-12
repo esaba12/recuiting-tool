@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { addApplication } from '../notion.js'
-import { STAGE_COLOR, Badge, fmt } from '../shared.jsx'
+import { addApplication, updateApplication } from '../notion.js'
+import { STAGE_COLOR, STAGE_ORDER, TERMINAL_STAGES, Badge, fmt, daysBetween } from '../shared.jsx'
 import { BUCKET_CONFIG, BUCKET_ACTIVE, BUCKET_TO_TRIAGE, TRIAGE_TO_BUCKET, generateJobAnalysis, lsGet } from './jobBoards/helpers.js'
 
 export default function ApplicationDetailModal({ app, onStatusChange, onClose, onDelete, onSaved }) {
@@ -11,6 +11,12 @@ export default function ApplicationDetailModal({ app, onStatusChange, onClose, o
     location: app?.location || '',
     jdLink:   app?.jdLink   || '',
   }))
+  const [dates, setDates] = useState(() => ({
+    stage:       app?.stage || 'Wishlist',
+    appliedDate: app?.appliedDate ? app.appliedDate.slice(0, 10) : '',
+    closedDate:  app?.closedDate ? app.closedDate.slice(0, 10) : '',
+  }))
+  const [savingDates, setSavingDates] = useState(false)
   const [saving, setSaving]       = useState(false)
   const [deleting, setDeleting]   = useState(false)
   const [error, setError]         = useState(null)
@@ -19,6 +25,31 @@ export default function ApplicationDetailModal({ app, onStatusChange, onClose, o
   const [aiError, setAiError]     = useState(null)
 
   const set = (key, val) => setForm(f => ({ ...f, [key]: val }))
+
+  // Moving into a terminal stage auto-fills today's date as Closed Date (if not already
+  // set); moving back out of one clears it — same "keep two fields in sync" pattern as
+  // ContactDetailModal's toggleUMichAlum.
+  function changeStage(stage) {
+    setDates(d => ({
+      ...d, stage,
+      closedDate: TERMINAL_STAGES.includes(stage) ? (d.closedDate || new Date().toISOString().split('T')[0]) : '',
+    }))
+  }
+
+  async function saveDates() {
+    setSavingDates(true); setError(null)
+    try {
+      await updateApplication(app.id, {
+        stage: dates.stage,
+        appliedDate: dates.appliedDate || null,
+        closedDate: dates.closedDate || null,
+      })
+      onSaved()
+    } catch (e) {
+      setError(e.message)
+      setSavingDates(false)
+    }
+  }
 
   const prefs = !isNew ? (lsGet('rec_prefs') || {}) : {}
   const status = !isNew ? (TRIAGE_TO_BUCKET[app.triage] || null) : null
@@ -99,12 +130,42 @@ export default function ApplicationDetailModal({ app, onStatusChange, onClose, o
                   </span>
                 )}
                 {app.appliedDate && <span className="text-xs text-ink-400">Applied {fmt(app.appliedDate)}</span>}
+                {app.closedDate && <span className="text-xs text-ink-400">Closed {fmt(app.closedDate)}</span>}
+                {app.appliedDate && app.closedDate && (
+                  <span className="text-xs text-ink-400">· {daysBetween(app.appliedDate, app.closedDate)}d to decision</span>
+                )}
               </div>
             </>
           )}
         </div>
 
         {error && <div className="mx-5 mt-4 p-3 bg-danger-50 border border-danger-200 rounded-xl text-xs text-danger-700">{error}</div>}
+
+        {!isNew && (
+          <div className="px-5 py-4 border-b border-ink-100 grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs text-ink-400 mb-0.5">Stage</label>
+              <select value={dates.stage} onChange={e => changeStage(e.target.value)}
+                className="w-full px-2.5 py-1.5 border border-ink-200 rounded-lg text-sm focus:outline-none focus:border-accent-400 bg-white">
+                {STAGE_ORDER.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-ink-400 mb-0.5">Applied Date</label>
+              <input type="date" value={dates.appliedDate} onChange={e => setDates(d => ({ ...d, appliedDate: e.target.value }))}
+                className="w-full px-2.5 py-1.5 border border-ink-200 rounded-lg text-sm focus:outline-none focus:border-accent-400" />
+            </div>
+            <div>
+              <label className="block text-xs text-ink-400 mb-0.5">Closed Date</label>
+              <input type="date" value={dates.closedDate} onChange={e => setDates(d => ({ ...d, closedDate: e.target.value }))}
+                className="w-full px-2.5 py-1.5 border border-ink-200 rounded-lg text-sm focus:outline-none focus:border-accent-400" />
+            </div>
+            <button onClick={saveDates} disabled={savingDates}
+              className="col-span-3 py-2 bg-ink-900 text-white text-xs rounded-xl hover:bg-ink-800 disabled:opacity-50 font-medium transition-colors">
+              {savingDates ? 'Saving...' : 'Save Stage / Dates'}
+            </button>
+          </div>
+        )}
 
         {isNew && (
           <div className="px-5 py-4 space-y-3">

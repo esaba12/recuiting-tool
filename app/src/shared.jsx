@@ -62,6 +62,11 @@ export function daysUntil(d) {
   return Math.floor((new Date(d) - Date.now()) / 86400000)
 }
 
+export function daysBetween(a, b) {
+  if (!a || !b) return null
+  return Math.round((new Date(b) - new Date(a)) / 86400000)
+}
+
 export function fmt(d) {
   if (!d) return '—'
   return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
