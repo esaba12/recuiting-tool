@@ -37,6 +37,9 @@ export const ROLE_OPTIONS = ['SWE','PM','Recruiter','Alumni','Referral','Other']
 export const SOURCE_OPTIONS = ['Coffee chat','Email','Event','Referral','LinkedIn DM']
 export const STATUS_OPTIONS = Object.keys(STATUS_COLOR)
 export const URGENCY_OPTIONS = ['HIGH','MED','LOW']
+// Shared-background signals, distinct from ROLE_OPTIONS's 'Alumni' (which describes this
+// contact's relationship *type* to you, not a background they happen to share with you).
+export const AFFINITY_OPTIONS = ['UMich','Same Hometown','Shared Club/Activity','Warm Intro']
 
 export function daysSince(d) {
   if (!d) return null

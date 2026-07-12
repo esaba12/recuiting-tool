@@ -26,7 +26,12 @@ export default function ContactsTable({ contacts, onEdit }) {
   const columns = useMemo(() => [
     col.accessor('name', {
       header: 'Name',
-      cell: info => <span className="font-medium text-ink-900">{info.getValue()}</span>,
+      cell: info => (
+        <span className="font-medium text-ink-900">
+          {info.getValue()}
+          {info.row.original.isUMichAlum && <span title="UMich alum" className="ml-1">🎓</span>}
+        </span>
+      ),
     }),
     col.accessor('company', {
       header: 'Company',

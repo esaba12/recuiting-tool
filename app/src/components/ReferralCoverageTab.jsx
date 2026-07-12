@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { lsGet, lsSet } from './jobBoards/helpers.js'
 import { normalizeCompanyName } from '../lib/networkGraph.js'
+import { affinityScore } from '../lib/affinity.js'
 import { STAGE_COLOR, Badge, EmptyState } from '../shared.jsx'
 import ContactDetailModal from './ContactDetailModal.jsx'
 import DraftPanel from './DraftPanel.jsx'
@@ -11,9 +12,11 @@ const TARGETS_KEY = 'rec_target_companies'
 // Contacts (do I know anyone there?) and Applications (have I already applied?).
 // Referred candidates convert at roughly 4x the rate of cold applicants and make up
 // ~2% of applicants but ~11% of hires — so a company with zero contacts is the single
-// highest-leverage gap to close before applying cold. "Covered" here means "any contact
-// at that company" — once affinity/tie-strength weighting exists (see the alumni/affinity
-// feature), this should upgrade to distinguish weak coverage from strong.
+// highest-leverage gap to close before applying cold. Coverage strength uses
+// lib/affinity.js's affinityScore (tie-strength bucket + affinity tags) rather than
+// just "any contact at all" — a company where your only contact is a total stranger you
+// added but never talked to isn't meaningfully covered.
+const STRONG_COVERAGE_THRESHOLD = 3
 export default function ReferralCoverageTab({ contacts, apps, interactions, onRefresh }) {
   const [targets, setTargets] = useState(() => lsGet(TARGETS_KEY) || [])
   const [editingList, setEditingList] = useState(() => (lsGet(TARGETS_KEY) || []).length === 0)
@@ -33,11 +36,14 @@ export default function ReferralCoverageTab({ contacts, apps, interactions, onRe
       const key = normalizeCompanyName(company)
       const matchedContacts = contacts.filter(c => c.company?.trim() && normalizeCompanyName(c.company) === key)
       const matchedApps = apps.filter(a => a.company?.trim() && normalizeCompanyName(a.company) === key)
-      return { company, matchedContacts, matchedApps, status: matchedContacts.length > 0 ? 'covered' : 'gap' }
+      const bestScore = matchedContacts.length > 0 ? Math.max(...matchedContacts.map(c => affinityScore(c, interactions))) : -1
+      const status = matchedContacts.length === 0 ? 'gap' : bestScore >= STRONG_COVERAGE_THRESHOLD ? 'strong' : 'weak'
+      return { company, matchedContacts, matchedApps, status }
     })
-    .sort((a, b) => (a.status === 'gap' ? 0 : 1) - (b.status === 'gap' ? 0 : 1))
+    .sort((a, b) => ({ gap: 0, weak: 1, strong: 2 }[a.status]) - ({ gap: 0, weak: 1, strong: 2 }[b.status]))
 
   const gapCount = rows.filter(r => r.status === 'gap').length
+  const weakCount = rows.filter(r => r.status === 'weak').length
 
   return (
     <div className="space-y-4">
@@ -66,21 +72,23 @@ export default function ReferralCoverageTab({ contacts, apps, interactions, onRe
         <EmptyState msg="Add a target-company list above to see where you have — and don't have — a way in." />
       ) : (
         <>
-          {gapCount > 0 && (
+          {(gapCount > 0 || weakCount > 0) && (
             <p className="text-sm text-danger-600 font-medium">
-              {gapCount} target compan{gapCount !== 1 ? 'ies' : 'y'} with no contact yet.
+              {gapCount > 0 && `${gapCount} target compan${gapCount !== 1 ? 'ies' : 'y'} with no contact yet.`}
+              {gapCount > 0 && weakCount > 0 && ' '}
+              {weakCount > 0 && `${weakCount} covered only by a cold or unengaged contact.`}
             </p>
           )}
           <div className="space-y-2">
             {rows.map(r => (
               <div key={r.company}
-                className={`bg-white rounded-xl p-4 shadow-sm border flex items-center justify-between gap-3 ${r.status === 'gap' ? 'border-danger-200' : 'border-ink-100'}`}>
+                className={`bg-white rounded-xl p-4 shadow-sm border flex items-center justify-between gap-3 ${r.status === 'gap' ? 'border-danger-200' : r.status === 'weak' ? 'border-warning-200' : 'border-ink-100'}`}>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold text-ink-900">{r.company}</span>
-                    {r.status === 'gap'
-                      ? <Badge label="No contact" color="bg-danger-100 text-danger-700" />
-                      : <Badge label={`${r.matchedContacts.length} contact${r.matchedContacts.length !== 1 ? 's' : ''}`} color="bg-success-100 text-success-800" />}
+                    {r.status === 'gap' && <Badge label="No contact" color="bg-danger-100 text-danger-700" />}
+                    {r.status === 'weak' && <Badge label={`${r.matchedContacts.length} contact${r.matchedContacts.length !== 1 ? 's' : ''} · weak tie`} color="bg-warning-100 text-warning-800" />}
+                    {r.status === 'strong' && <Badge label={`${r.matchedContacts.length} contact${r.matchedContacts.length !== 1 ? 's' : ''}`} color="bg-success-100 text-success-800" />}
                     {r.matchedApps.length > 0 && (
                       <Badge label={r.matchedApps[0].stage} color={STAGE_COLOR[r.matchedApps[0].stage]} />
                     )}

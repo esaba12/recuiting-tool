@@ -27,6 +27,8 @@ Quick reference for all 5 databases. Full setup instructions in `plans/phase-1-n
 | Follow-Up Draft | Text | Persisted current draft (cold-open or follow-up), written by the outreach drafting subsystem (`lib/drafting.js` + `DraftPanel.jsx`). Added by `notion/add-followup-fields.js`. |
 | Follow-Up Draft Tier | Number | Escalation tier (1/2/3) the persisted `Follow-Up Draft` was generated for — 0/empty for a cold-open draft. Used to know when to regenerate rather than reuse a stale draft. |
 | Follow-Up Draft Kind | Select | `Cold Open` / `Follow-Up` |
+| Is UMich Alum | Checkbox | Fast one-click signal — kept in sync with `Notable Affinity` containing `UMich` (toggling either updates both). Added by `notion/add-affinity-fields.js`. Distinct from `Role`'s `Alumni` option, which describes this contact's *relationship type* to you (mutually exclusive with e.g. `SWE`) — this describes a *shared background*, which a SWE at a target company can also have. |
+| Notable Affinity | Multi-select | `UMich` / `Same Hometown` / `Shared Club/Activity` / `Warm Intro`. Feeds `lib/affinity.js`'s `affinityScore()`, used by the Referral Coverage tab to rank moderately-weak ties above both cold contacts and over-relied-on strong ties — see that file's comment for the research citation (Rajkumar et al., Science 2022). |
 
 ---
 
