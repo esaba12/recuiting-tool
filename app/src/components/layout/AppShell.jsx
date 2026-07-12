@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import Sidebar from './Sidebar.jsx'
+import ErrorBoundary from '../ErrorBoundary.jsx'
 
 export default function AppShell({ activeTab, onTabChange, counts, loading, lastLoaded, onRefresh, onAddEvent, error, children }) {
   return (
@@ -30,7 +31,9 @@ export default function AppShell({ activeTab, onTabChange, counts, loading, last
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15 }}
           >
-            {children}
+            <ErrorBoundary key={activeTab}>
+              {children}
+            </ErrorBoundary>
           </motion.div>
         </AnimatePresence>
       </main>

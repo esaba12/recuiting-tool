@@ -28,7 +28,9 @@ export default function NetworkGraphView({ contacts, compact = false, height = 5
   // delayed so the force sim has a few ticks to spread nodes out first.
   useEffect(() => {
     if (!fgRef.current || data.nodes.length === 0) return
-    const t = setTimeout(() => fgRef.current?.zoomToFit(800, compact ? 24 : 40), 350)
+    const t = setTimeout(() => {
+      try { fgRef.current?.zoomToFit(800, compact ? 24 : 40) } catch { /* graph not ready yet — skip the flourish */ }
+    }, 350)
     return () => clearTimeout(t)
   }, [data, compact])
 
@@ -54,6 +56,11 @@ export default function NetworkGraphView({ contacts, compact = false, height = 5
       nodeLabel={n => n.label}
       nodeCanvasObjectMode={() => 'replace'}
       nodeCanvasObject={(n, ctx, scale) => {
+        // Before the force sim's first tick, nodes can carry undefined/NaN coordinates —
+        // canvas gradient/arc calls with non-finite values throw and (with no error
+        // boundary upstream) can blank the whole page, so just skip painting this frame.
+        if (!Number.isFinite(n.x) || !Number.isFinite(n.y)) return
+
         const dimmed = isDimmed(n.id)
         const hovered = hoverNode?.id === n.id
         const baseColor = n.kind === 'company' ? COMPANY_COLOR : (STATUS_CHART_COLORS[n.contact?.status] || COMPANY_COLOR)
