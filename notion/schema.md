@@ -109,3 +109,14 @@ dateAdd(prop("Solved Date"), 1, "days")))
 - Review Date ≤ Today
 - Status = Solved
 - Sort: Review Date ascending
+
+---
+
+## Client-side state (localStorage keys)
+
+Not in Notion — per-browser, set via the dashboard UI. Lost on cache clear; nothing here is backed up.
+
+| Key | Shape | Set by |
+|---|---|---|
+| `rec_prefs` | `{ targetRoles, preferredLocations, interests, companyType, dealBreakers }` | `jobBoards/PreferencesPanel.jsx` — feeds the Job Boards AI fit-analysis prompt |
+| `rec_target_companies` | `string[]` (company names) | `ReferralCoverageTab.jsx` (Network → Coverage view) — cross-referenced against Contacts/Applications by normalized company name (`lib/networkGraph.js`'s `normalizeCompanyName()`) to surface companies with no contact yet |
