@@ -24,6 +24,9 @@ Quick reference for all 5 databases. Full setup instructions in `plans/phase-1-n
 | Referred By | Relation | → Contacts DB (self) — who introduced/referred you to this contact |
 | Notes | Text | |
 | Exa Enriched | Checkbox | Checked after Exa enrichment runs |
+| Follow-Up Draft | Text | Persisted current draft (cold-open or follow-up), written by the outreach drafting subsystem (`lib/drafting.js` + `DraftPanel.jsx`). Added by `notion/add-followup-fields.js`. |
+| Follow-Up Draft Tier | Number | Escalation tier (1/2/3) the persisted `Follow-Up Draft` was generated for — 0/empty for a cold-open draft. Used to know when to regenerate rather than reuse a stale draft. |
+| Follow-Up Draft Kind | Select | `Cold Open` / `Follow-Up` |
 
 ---
 

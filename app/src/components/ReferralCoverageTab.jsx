@@ -3,6 +3,7 @@ import { lsGet, lsSet } from './jobBoards/helpers.js'
 import { normalizeCompanyName } from '../lib/networkGraph.js'
 import { STAGE_COLOR, Badge, EmptyState } from '../shared.jsx'
 import ContactDetailModal from './ContactDetailModal.jsx'
+import DraftPanel from './DraftPanel.jsx'
 
 const TARGETS_KEY = 'rec_target_companies'
 
@@ -18,6 +19,7 @@ export default function ReferralCoverageTab({ contacts, apps, interactions, onRe
   const [editingList, setEditingList] = useState(() => (lsGet(TARGETS_KEY) || []).length === 0)
   const [draft, setDraft] = useState(() => (lsGet(TARGETS_KEY) || []).join('\n'))
   const [addingFor, setAddingFor] = useState(null) // target company name string | null
+  const [draftingCompany, setDraftingCompany] = useState(null) // company key currently showing a DraftPanel | null
 
   function saveTargets() {
     const list = [...new Set(draft.split('\n').map(s => s.trim()).filter(Boolean))]
@@ -88,11 +90,19 @@ export default function ReferralCoverageTab({ contacts, apps, interactions, onRe
                       {r.matchedContacts.map(c => c.name).join(', ')}
                     </p>
                   )}
+                  {draftingCompany === r.company && r.matchedContacts[0] && (
+                    <DraftPanel contact={r.matchedContacts[0]} kind="cold_open" />
+                  )}
                 </div>
-                {r.status === 'gap' && (
+                {r.status === 'gap' ? (
                   <button onClick={() => setAddingFor(r.company)}
                     className="shrink-0 px-3 py-1.5 bg-white border border-ink-200 rounded-full text-xs font-medium text-ink-600 hover:border-accent-300">
                     + Add contact
+                  </button>
+                ) : (
+                  <button onClick={() => setDraftingCompany(c => c === r.company ? null : r.company)}
+                    className="shrink-0 px-3 py-1.5 bg-white border border-ink-200 rounded-full text-xs font-medium text-ink-600 hover:border-accent-300">
+                    {draftingCompany === r.company ? 'Hide' : '✎ Draft outreach'}
                   </button>
                 )}
               </div>

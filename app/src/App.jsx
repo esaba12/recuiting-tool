@@ -225,7 +225,7 @@ export default function App() {
         <NetworkTab contacts={contacts} apps={apps} interactions={interactions} onRefresh={load} initialView={networkInitialView} />
       )}
       {!loading && tab === 'pipeline' && <PipelineTab apps={apps} onRefresh={load} />}
-      {!loading && tab === 'actions'  && <ActionsTab contacts={contacts} apps={apps} />}
+      {!loading && tab === 'actions'  && <ActionsTab contacts={contacts} apps={apps} interactions={interactions} onRefresh={load} />}
       {!loading && tab === 'calendar' && <CalendarTab contacts={contacts} apps={apps} onRefresh={load} />}
       {tab === 'github'   && <GitHubTab apps={apps} onImported={load} />}
 
