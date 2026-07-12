@@ -6,6 +6,17 @@ import DraftPanel from './DraftPanel.jsx'
 export default function ActionsTab({ contacts, apps, interactions = [], onRefresh }) {
   const activeApps = apps.filter(a => !TERMINAL_STAGES.includes(a.stage) && !isUntriaged(a))
 
+  // People explicitly queued via "+ Schedule" — soonest Schedule By first, no-date last
+  // (added quickly and not yet given an urgency, not "not urgent").
+  const scheduleContacts = contacts
+    .filter(c => c.wantsToSchedule)
+    .sort((a, b) => {
+      if (!a.scheduleBy && !b.scheduleBy) return 0
+      if (!a.scheduleBy) return 1
+      if (!b.scheduleBy) return -1
+      return new Date(a.scheduleBy) - new Date(b.scheduleBy)
+    })
+
   const overdueContacts = contacts
     .filter(isOverdue)
     .sort((a, b) => daysUntil(a.followUpDate) - daysUntil(b.followUpDate))
@@ -25,12 +36,20 @@ export default function ActionsTab({ contacts, apps, interactions = [], onRefres
     c.urgency === 'HIGH' && c.status !== '✅ Closed' && (!c.followUpDate || daysUntil(c.followUpDate) > 0)
   )
 
-  if (overdueContacts.length + staleApps.length + highUrgencyContacts.length === 0) {
+  if (scheduleContacts.length + overdueContacts.length + staleApps.length + highUrgencyContacts.length === 0) {
     return <EmptyState msg="✓ Nothing overdue. You're on top of it." />
   }
 
   return (
     <div className="space-y-4">
+      {scheduleContacts.length > 0 && (
+        <Section title={`Want to Schedule (${scheduleContacts.length})`} accent="indigo">
+          {scheduleContacts.map(c => (
+            <ScheduleQueueRow key={c.id} contact={c} onRefresh={onRefresh} />
+          ))}
+        </Section>
+      )}
+
       {overdueContacts.length > 0 && (
         <Section title={`Overdue Follow-Ups (${overdueContacts.length})`} accent="red">
           {overdueContacts.map(c => (
@@ -74,8 +93,8 @@ export default function ActionsTab({ contacts, apps, interactions = [], onRefres
 }
 
 function Section({ title, subtitle, accent, children }) {
-  const border = { red: 'border-danger-200', orange: 'border-orange-200', yellow: 'border-warning-200' }[accent] || 'border-ink-200'
-  const heading = { red: 'text-danger-700', orange: 'text-orange-700', yellow: 'text-warning-700' }[accent] || 'text-ink-700'
+  const border = { red: 'border-danger-200', orange: 'border-orange-200', yellow: 'border-warning-200', indigo: 'border-indigo-200' }[accent] || 'border-ink-200'
+  const heading = { red: 'text-danger-700', orange: 'text-orange-700', yellow: 'text-warning-700', indigo: 'text-indigo-700' }[accent] || 'text-ink-700'
   return (
     <div className={`bg-white rounded-xl p-5 shadow-sm border ${border}`}>
       <h2 className={`text-sm font-semibold ${heading} mb-1`}>{title}</h2>
@@ -141,6 +160,54 @@ function OverdueContactRow({ contact: c, interactions, onRefresh }) {
           )
           : <DraftPanel contact={c} kind="follow_up" daysOverdue={Math.abs(daysUntil(c.followUpDate))} onSaved={onRefresh} />
       )}
+    </div>
+  )
+}
+
+// Someone added via "+ Schedule" — reminder stays until explicitly marked scheduled
+// (unchecking Wants To Schedule), independent of Follow-Up Date/Status, since this is
+// "get something on the calendar" intent, not a post-interaction follow-up.
+function ScheduleQueueRow({ contact: c, onRefresh }) {
+  const [expanded, setExpanded] = useState(false)
+  const [marking, setMarking] = useState(false)
+  const overdue = c.scheduleBy && daysUntil(c.scheduleBy) <= 0
+
+  async function markScheduled() {
+    setMarking(true)
+    try {
+      await updateContact(c.id, { wantsToSchedule: false })
+      onRefresh?.()
+    } catch {
+      setMarking(false)
+    }
+  }
+
+  return (
+    <div className="py-2.5">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0 cursor-pointer" onClick={() => setExpanded(e => !e)}>
+          <p className="text-sm font-medium text-ink-900">{c.name}</p>
+          <p className="text-xs text-ink-500">{[c.company, c.role].filter(Boolean).join(' · ')}</p>
+          {c.scheduleNote && <p className="text-xs text-ink-400 italic mt-0.5 line-clamp-1">"{c.scheduleNote}"</p>}
+        </div>
+        <div className="text-right shrink-0 space-y-1">
+          {c.scheduleBy && (
+            <p className={`text-xs font-medium ${overdue ? 'text-danger-600' : 'text-ink-500'}`}>
+              {overdue ? `Wanted by ${fmt(c.scheduleBy)} (${Math.abs(daysUntil(c.scheduleBy))}d ago)` : `Schedule by ${fmt(c.scheduleBy)}`}
+            </p>
+          )}
+          <div className="flex items-center gap-2 justify-end">
+            <button onClick={() => setExpanded(e => !e)} className="text-xs text-accent-500 hover:underline">
+              {expanded ? 'Hide' : 'Draft outreach'}
+            </button>
+            <button onClick={markScheduled} disabled={marking} className="text-xs text-ink-400 hover:text-ink-600 hover:underline disabled:opacity-40">
+              {marking ? 'Marking...' : '✓ Scheduled'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {expanded && <DraftPanel contact={c} kind="cold_open" onSaved={onRefresh} />}
     </div>
   )
 }

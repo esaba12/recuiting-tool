@@ -2,7 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import Sidebar from './Sidebar.jsx'
 import ErrorBoundary from '../ErrorBoundary.jsx'
 
-export default function AppShell({ activeTab, onTabChange, counts, loading, lastLoaded, onRefresh, onAddEvent, error, children }) {
+export default function AppShell({ activeTab, onTabChange, counts, loading, lastLoaded, onRefresh, onAddEvent, onAddSchedule, error, children }) {
   return (
     <div className="flex min-h-screen bg-canvas font-body text-ink-900">
       <Sidebar
@@ -13,6 +13,7 @@ export default function AppShell({ activeTab, onTabChange, counts, loading, last
         lastLoaded={lastLoaded}
         onRefresh={onRefresh}
         onAddEvent={onAddEvent}
+        onAddSchedule={onAddSchedule}
       />
 
       <main className="flex-1 px-6 md:px-10 py-8 pb-24 md:pb-8 max-w-7xl mx-auto w-full">

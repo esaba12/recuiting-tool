@@ -13,6 +13,7 @@ import ActionsTab from './components/ActionsTab.jsx'
 import CalendarTab from './components/CalendarTab.jsx'
 import GitHubTab from './components/jobBoards/GitHubTab.jsx'
 import AddToCalendarModal from './components/AddToCalendarModal.jsx'
+import QuickScheduleModal from './components/QuickScheduleModal.jsx'
 import ReferralCoverageTab from './components/ReferralCoverageTab.jsx'
 import { Table2, LayoutGrid, Share2, Target } from 'lucide-react'
 
@@ -178,6 +179,7 @@ export default function App() {
   const [error, setError]       = useState(null)
   const [lastLoaded, setLastLoaded] = useState(null)
   const [addEventOpen, setAddEventOpen] = useState(false)
+  const [addScheduleOpen, setAddScheduleOpen] = useState(false)
 
   useEffect(() => { load() }, [])
 
@@ -197,7 +199,8 @@ export default function App() {
     const d = a.daysInStage ?? (a.lastActivity ? Math.floor((Date.now() - new Date(a.lastActivity)) / 86400000) : null)
     return d !== null && d > 14
   }).length
-  const actionCount = overdueCount + staleCount
+  const scheduleCount = contacts.filter(c => c.wantsToSchedule).length
+  const actionCount = overdueCount + staleCount + scheduleCount
 
   const counts = {
     network: contacts.length,
@@ -214,12 +217,14 @@ export default function App() {
       lastLoaded={lastLoaded}
       onRefresh={load}
       onAddEvent={() => setAddEventOpen(true)}
+      onAddSchedule={() => setAddScheduleOpen(true)}
       error={error}
     >
       {loading && <EmptyState msg="Loading from Notion..." />}
       {!loading && tab === 'overview' && (
         <OverviewTab contacts={contacts} apps={apps} interactions={interactions}
-          onOpenGraph={() => { setNetworkInitialView('graph'); setTab('network') }} />
+          onOpenGraph={() => { setNetworkInitialView('graph'); setTab('network') }}
+          onOpenActions={() => setTab('actions')} />
       )}
       {!loading && tab === 'network'  && (
         <NetworkTab contacts={contacts} apps={apps} interactions={interactions} onRefresh={load} initialView={networkInitialView} />
@@ -230,6 +235,13 @@ export default function App() {
       {tab === 'github'   && <GitHubTab apps={apps} onImported={load} />}
 
       {addEventOpen && <AddToCalendarModal onClose={() => setAddEventOpen(false)} />}
+      {addScheduleOpen && (
+        <QuickScheduleModal
+          contacts={contacts}
+          onClose={() => setAddScheduleOpen(false)}
+          onSaved={() => { setAddScheduleOpen(false); load() }}
+        />
+      )}
     </AppShell>
   )
 }

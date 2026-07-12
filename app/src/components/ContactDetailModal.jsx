@@ -23,6 +23,9 @@ export default function ContactDetailModal({ contact, contacts, interactions, on
     followUpDate: contact?.followUpDate ? contact.followUpDate.slice(0, 10) : '',
     isUMichAlum: contact?.isUMichAlum || false,
     affinity:    contact?.affinity || [],
+    wantsToSchedule: contact?.wantsToSchedule || false,
+    scheduleBy:      contact?.scheduleBy ? contact.scheduleBy.slice(0, 10) : '',
+    scheduleNote:    contact?.scheduleNote || '',
   }))
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -67,6 +70,7 @@ export default function ContactDetailModal({ contact, contacts, interactions, on
           referredById: form.referredById || null, whatTheyDid: form.whatTheyDid, notes: form.notes,
           followUpDate: form.followUpDate || null,
           isUMichAlum: form.isUMichAlum, affinity: form.affinity,
+          wantsToSchedule: form.wantsToSchedule, scheduleBy: form.scheduleBy || null, scheduleNote: form.scheduleNote,
         })
       }
       onSaved()
@@ -164,6 +168,29 @@ export default function ContactDetailModal({ contact, contacts, interactions, on
                   </button>
                 ))}
               </div>
+            </div>
+          )}
+
+          {!isNew && (
+            <div className="pt-3 border-t border-ink-100">
+              <label className="flex items-center gap-2 text-xs text-ink-600 mb-2 cursor-pointer">
+                <input type="checkbox" checked={form.wantsToSchedule} onChange={e => set('wantsToSchedule', e.target.checked)} className="rounded border-ink-300" />
+                📅 Want to schedule <span className="text-ink-400 font-normal">— shows as a reminder in Actions until checked off</span>
+              </label>
+              {form.wantsToSchedule && (
+                <div className="grid grid-cols-2 gap-3 mt-2">
+                  <div>
+                    <label className="block text-xs text-ink-400 mb-0.5">Schedule by</label>
+                    <input type="date" value={form.scheduleBy} onChange={e => set('scheduleBy', e.target.value)}
+                      className="w-full px-2.5 py-1.5 border border-ink-200 rounded-lg text-sm focus:outline-none focus:border-accent-400" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-ink-400 mb-0.5">Why / what to discuss</label>
+                    <input value={form.scheduleNote} onChange={e => set('scheduleNote', e.target.value)}
+                      className="w-full px-2.5 py-1.5 border border-ink-200 rounded-lg text-sm focus:outline-none focus:border-accent-400" />
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

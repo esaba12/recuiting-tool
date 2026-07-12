@@ -30,6 +30,7 @@ export default function ContactsTable({ contacts, onEdit }) {
         <span className="font-medium text-ink-900">
           {info.getValue()}
           {info.row.original.isUMichAlum && <span title="UMich alum" className="ml-1">🎓</span>}
+          {info.row.original.wantsToSchedule && <span title="Want to schedule" className="ml-1">📅</span>}
         </span>
       ),
     }),
