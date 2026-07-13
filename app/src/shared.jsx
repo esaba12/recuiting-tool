@@ -17,6 +17,13 @@ export const URGENCY_COLOR = {
   LOW:  'bg-ink-100 text-ink-400',
 }
 
+// Interaction channel colors — shared by ContactDetailModal's per-contact History panel
+// and OutboxTab's cross-contact sent-mail list.
+export const TYPE_COLOR = {
+  Email: 'bg-accent-100 text-accent-700', LinkedIn: 'bg-purple-100 text-purple-700',
+  Call: 'bg-success-100 text-success-700', Meeting: 'bg-orange-100 text-orange-700', Other: 'bg-ink-100 text-ink-600',
+}
+
 // Whether this contact is going to give (or has given) a referral for a job
 // application — distinct from ROLE_OPTIONS's 'Referral' (their relationship type
 // to you) and 'Referred By' (who introduced *you* to this contact).

@@ -15,7 +15,8 @@ import GitHubTab from './components/jobBoards/GitHubTab.jsx'
 import AddToCalendarModal from './components/AddToCalendarModal.jsx'
 import QuickScheduleModal from './components/QuickScheduleModal.jsx'
 import ReferralCoverageTab from './components/ReferralCoverageTab.jsx'
-import { Table2, LayoutGrid, Share2, Target } from 'lucide-react'
+import OutboxTab from './components/OutboxTab.jsx'
+import { Table2, LayoutGrid, Share2, Target, Send } from 'lucide-react'
 
 // ── Network Tab ───────────────────────────────────────────────────────────────
 
@@ -24,6 +25,7 @@ const NETWORK_VIEWS = [
   { key: 'cards',    label: 'Cards',    icon: LayoutGrid },
   { key: 'graph',    label: 'Graph',    icon: Share2 },
   { key: 'coverage', label: 'Coverage', icon: Target },
+  { key: 'outbox',   label: 'Outbox',   icon: Send },
 ]
 
 function NetworkTab({ contacts, apps, interactions, onRefresh, initialView = 'table' }) {
@@ -90,6 +92,8 @@ function NetworkTab({ contacts, apps, interactions, onRefresh, initialView = 'ta
         ? <ReferralCoverageTab contacts={contacts} apps={apps} interactions={interactions} onRefresh={onRefresh} />
         : view === 'graph'
         ? <NetworkGraphTab contacts={contacts} />
+        : view === 'outbox'
+        ? <OutboxTab contacts={contacts} interactions={interactions} />
         : filtered.length === 0
         ? <EmptyState msg={contacts.length === 0 ? 'No contacts yet — the email pipeline will add them as recruiting emails come in.' : 'No contacts match this filter.'} />
         : view === 'table'

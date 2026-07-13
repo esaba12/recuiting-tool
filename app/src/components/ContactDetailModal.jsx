@@ -1,10 +1,8 @@
 import { useState } from 'react'
 import { addContact, updateContact, archiveContact } from '../notion.js'
-import { ROLE_OPTIONS, SOURCE_OPTIONS, STATUS_OPTIONS, URGENCY_OPTIONS, AFFINITY_OPTIONS, REFERRAL_STATUS_OPTIONS, Badge, fmt } from '../shared.jsx'
+import { ROLE_OPTIONS, SOURCE_OPTIONS, STATUS_OPTIONS, URGENCY_OPTIONS, AFFINITY_OPTIONS, REFERRAL_STATUS_OPTIONS, TYPE_COLOR, Badge, fmt } from '../shared.jsx'
 import LogInteractionModal from './LogInteractionModal.jsx'
 import DraftPanel from './DraftPanel.jsx'
-
-const TYPE_COLOR = { Email: 'bg-accent-100 text-accent-700', LinkedIn: 'bg-purple-100 text-purple-700', Call: 'bg-success-100 text-success-700', Meeting: 'bg-orange-100 text-orange-700', Other: 'bg-ink-100 text-ink-600' }
 
 export default function ContactDetailModal({ contact, contacts, interactions, onClose, onSaved, initial = {} }) {
   const isNew = !contact

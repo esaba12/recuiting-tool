@@ -18,6 +18,10 @@ const CONTACTS_DB     = '6f941973-1fce-40c3-943c-4c908940e2a8'
 const APPS_DB         = '49011c2e-8165-4373-a41b-f913b02d1052'
 const INTERACTIONS_DB = '39753135-a476-819e-96b4-dc41ecab6364'
 const DONE_LABEL      = 'recruiting-done' // visual marker in Gmail only — no longer used to gate processing, since threads can grow replies after being marked done
+const RECRUITING_LABEL = 'recruiting'
+// Recent Sent-folder threads not yet labeled — catches brand-new cold outreach the user
+// sends that never went through an already-labeled thread. 30d bounds the first-run backfill.
+const SENT_SCAN_QUERY = `in:sent -label:${RECRUITING_LABEL} newer_than:30d`
 
 function getKeys() {
   const p = PropertiesService.getScriptProperties()
@@ -34,15 +38,25 @@ function getKeys() {
 function processRecruitingEmails() {
   const keys    = getKeys()
   const props   = PropertiesService.getScriptProperties()
-  const threads = GmailApp.search('label:recruiting', 0, 25)
   const myEmail = Session.getActiveUser().getEmail().toLowerCase()
+
+  // Two discovery sources, deduped by thread ID since a thread can appear in both:
+  // (1) threads already labeled 'recruiting' (inbound emails, or previously-discovered
+  // sent threads — see the label-application step below), and (2) recent Sent-folder
+  // threads not yet labeled, which catches brand-new cold outreach the user sends.
+  const labeledThreads = GmailApp.search(`label:${RECRUITING_LABEL}`, 0, 25)
+  const sentThreads     = GmailApp.search(SENT_SCAN_QUERY, 0, 25)
+  const threadsById     = new Map()
+  ;[...labeledThreads, ...sentThreads].forEach(t => threadsById.set(t.getId(), t))
+  const threads = [...threadsById.values()]
 
   if (!threads.length) {
     console.log('No recruiting threads found.')
     return
   }
 
-  const doneLabel = getOrCreateLabel(DONE_LABEL)
+  const doneLabel       = getOrCreateLabel(DONE_LABEL)
+  const recruitingLabel = getOrCreateLabel(RECRUITING_LABEL)
   console.log(`Scanning ${threads.length} thread(s)`)
 
   threads.forEach(thread => {
@@ -71,6 +85,13 @@ function processRecruitingEmails() {
         return
       }
 
+      // Header-derived address is authoritative — Claude never guesses contact_email from
+      // body text, since that breaks when the newest message is outbound (its 'from' header
+      // is the user's own address, not the recruiter's). See findCounterpartAddress().
+      const counterpart = findCounterpartAddress(messages, myEmail)
+      data.contact_email = counterpart.email || null
+      if (!data.contact_name && counterpart.displayName) data.contact_name = counterpart.displayName
+
       console.log(`  Type: ${data.type} | ${data.contact_name} @ ${data.company}`)
 
       const contactId = upsertContact(keys.notion, data)
@@ -90,6 +111,12 @@ function processRecruitingEmails() {
       for (let i = seen; i < messages.length; i++) {
         logMessageInteraction(keys.notion, messages[i], contactId, threadId, myEmail)
       }
+
+      // A thread discovered via the Sent-folder search (not already labeled) gets the
+      // 'recruiting' label applied now that it's confirmed relevant — keeps Gmail's own
+      // label view consistent and means future runs find it via the primary labeled search.
+      const labelNames = thread.getLabels().map(l => l.getName())
+      if (!labelNames.includes(RECRUITING_LABEL)) thread.addLabel(recruitingLabel)
 
       thread.addLabel(doneLabel)
       props.setProperty(seenKey, String(messages.length))
@@ -116,8 +143,7 @@ If not recruiting-related: {"type":"UNRELATED"}
 Otherwise return:
 {
   "type": "REPLY|INTERVIEW_INVITE|OFFER|REJECTION|NEW_CONTACT|FOLLOW_UP_NEEDED",
-  "contact_name": "their full name",
-  "contact_email": "their email address",
+  "contact_name": "the recruiter/contact's full name if mentioned in the body or signature, else null — their email address is resolved separately from message headers, not from this field",
   "company": "company name",
   "role": "role title or null",
   "summary": "2-sentence summary of what this email means for the candidate",
@@ -157,6 +183,39 @@ ${body}`
   const match = text.match(/\{[\s\S]*\}/)
   if (!match) throw new Error('No JSON in Claude response')
   return JSON.parse(match[0])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ADDRESS PARSING — deterministic counterpart resolution from Gmail headers
+// ─────────────────────────────────────────────────────────────────────────────
+
+function parseAddress(headerStr) {
+  if (!headerStr) return null
+  const m = headerStr.match(/(.*)<(.+)>/)
+  if (m) return { displayName: m[1].replace(/["']/g, '').trim(), email: m[2].trim().toLowerCase() }
+  const email = headerStr.trim().toLowerCase()
+  return email ? { displayName: '', email } : null
+}
+
+function parseAddressList(headerStr) {
+  if (!headerStr) return []
+  return headerStr.split(',').map(parseAddress).filter(Boolean)
+}
+
+// Resolves the "other party" on a thread from the newest message's headers, so contact
+// identification doesn't depend on Claude guessing an email address out of body text —
+// which breaks when the newest message is one the user sent (the From header is then the
+// user's own address, not the recruiter's). Checks From, then To, then Cc, in that order,
+// skipping any address that's the user's own. Simplifying assumption: the whole thread maps
+// to one contact even if a second person is CC'd — same assumption the interaction-logging
+// loop in processRecruitingEmails() already makes.
+function findCounterpartAddress(messages, myEmail) {
+  const msg  = messages[messages.length - 1]
+  const from = parseAddress(msg.getFrom())
+  if (from && from.email !== myEmail) return from
+
+  const candidates = [...parseAddressList(msg.getTo()), ...parseAddressList(msg.getCc())]
+  return candidates.find(a => a.email !== myEmail) || { displayName: '', email: null }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -223,12 +282,11 @@ function upsertContact(notionKey, data) {
 }
 
 function logMessageInteraction(notionKey, message, contactId, threadId, myEmail) {
-  const fromHeader = message.getFrom() || ''
-  const addrMatch  = fromHeader.match(/<(.+)>/)
-  const fromAddr   = (addrMatch ? addrMatch[1] : fromHeader).toLowerCase()
-  const direction  = fromAddr === myEmail ? 'Outbound' : 'Inbound'
-  const date       = Utilities.formatDate(message.getDate(), 'UTC', 'yyyy-MM-dd')
-  const title      = `Email — ${direction} — ${date}`
+  const from      = parseAddress(message.getFrom())
+  const direction = (from && from.email === myEmail) ? 'Outbound' : 'Inbound'
+  const date      = Utilities.formatDate(message.getDate(), 'UTC', 'yyyy-MM-dd')
+  const title     = `Email — ${direction} — ${date}`
+  const plainBody = message.getPlainBody()
 
   notionReq(notionKey, 'post', '/pages', {
     parent:     { database_id: INTERACTIONS_DB },
@@ -239,7 +297,8 @@ function logMessageInteraction(notionKey, message, contactId, threadId, myEmail)
       'Type':        { select: { name: 'Email' } },
       'Direction':   { select: { name: direction } },
       'Channel Ref': { rich_text: [{ text: { content: threadId } }] },
-      'Summary':     { rich_text: [{ text: { content: message.getPlainBody().slice(0, 300) } }] },
+      'Summary':     { rich_text: [{ text: { content: plainBody.slice(0, 300) } }] },
+      'Body':        { rich_text: [{ text: { content: plainBody.slice(0, 2000) } }] },
     },
   })
 }
@@ -326,6 +385,7 @@ function setup() {
   }
 
   getOrCreateLabel(DONE_LABEL)
+  getOrCreateLabel(RECRUITING_LABEL)
   console.log('✓ Labels created')
   console.log('✓ API keys found')
   console.log('✓ Setup complete')
