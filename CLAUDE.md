@@ -21,7 +21,7 @@ A zero-touch recruiting OS for a student's SWE/PM internship search. Calls, emai
 | Google Calendar API | Screenshot/text → calendar event, via OAuth | ✅ Live in dev · 🔄 needs env vars added to Vercel for production |
 | Granola | Call transcription (no bot) | 🔄 Download + connect |
 | LeetNotion extension | LeetCode → Notion auto-sync | 🔄 Pending install |
-| Exa ($250 YC credits) | Contact enrichment — LinkedIn lookup | 🔄 Planned |
+| Exa | People discovery (Discover tab) — public-web people search | ✅ Wired via serverless proxy · needs a (free) Exa account key |
 
 **Abandoned:** Gumloop (BYOK requires $37/mo Pro plan), Cowork/Claude Desktop scheduled tasks
 
@@ -127,6 +127,15 @@ What used to be 3 separate top-level tabs (Graph, LinkedIn, Calls) plus a Quick 
 - **Meeting / Email / Other**: no transcript step, just contact/date/duration/notes → Interactions DB only.
 - LinkedIn logging remains deliberately manual — no scraping/automation tooling (real LinkedIn account-ban risk for automated message capture).
 
+### Discover Tab — people discovery (shipped July 2026)
+Finds *new* people to reach out to at target companies, ranked by warm-tie signals from Ethan's résumé + reachability. Complements the Coverage view (which only flags *whether* a gap exists) by actually sourcing the people to close it. Uses the **same** `rec_target_companies` list as Coverage.
+
+**Data source — compliance boundary (important):** all people come from **Exa's public-web search index** (`app/src/lib/exa.js` → `/exa` proxy → `api.exa.ai`). This is a search engine over the open web — it never scrapes or logs into LinkedIn. LinkedIn URLs it surfaces are treated as **reference links only** (the app links out, never programmatically fetches linkedin.com). This is the deliberate extension of the "no LinkedIn scraping/automation" stance above. `EXA_API_KEY` is server-side only (Vercel env + `.env`), like every other key.
+
+**Flow:** `lib/exa.js`'s `discoverPeople({company, roles, profile})` runs one Exa `/search` (`category:"people"`) then one Claude Haiku call to structure the results into people (`{name,title,company,school,pastCompanies,programs,linkedinUrl}`). `lib/discovery.js`'s `discoveryScore()` then ranks each — it's a **pre-contact** scorer (affinity.js can't rank strangers: no interaction history → everyone buckets cold/0). It scores résumé-signal overlap (user-weighted: past employer > program > university > hometown), reachability × relevance (reachable ICs/recruiters up, VPs down), and **"next best person"** coverage (first contact at a gap company, or a *different-role* person where you already know someone — with name-dedup sinking people already in Contacts).
+
+**UI (`components/DiscoverTab.jsx`):** collapsible **background-signals profile** editor (`rec_affinity_profile` localStorage, seeded with UMich), per-company "Find people" → ranked **candidate cards** (score + reason chips + LinkedIn link), and a global **Top prospects** view flattening all discovered candidates by score. Discovered people are a **staging queue** (`rec_discovered` localStorage) — nothing hits Notion until you click **+ Add to Contacts** (which dedups via `searchContactByName`, then `addContact` + `updateContact` writing `linkedin`/`Notable Affinity`/`Is UMich Alum`, status Cold). **✎ Draft intro** reuses `lib/drafting.js`'s `draftMessage` (`kind:"cold_open"`, personalization seeded from the matched signals). Dismissed/added candidates persist so re-runs don't resurface them.
+
 ### Job Boards Tab (most-developed feature)
 - Input: GitHub repo URL (e.g., `github.com/speedyapply/2027-SWE-College-Jobs`) or username
 - Parses README markdown/HTML tables → structured job listings
@@ -148,6 +157,7 @@ What used to be 3 separate top-level tabs (Graph, LinkedIn, Calls) plus a Quick 
 /gh-contrib      → github-contributions-api.jogruber.de
 /claude-api      → api.anthropic.com           (injects ANTHROPIC_API_KEY; strips incoming Origin/Referer — see Known Issues)
 /google-calendar → www.googleapis.com          (mints an access token from GOOGLE_REFRESH_TOKEN first, then forwards)
+/exa             → api.exa.ai                  (injects EXA_API_KEY; strips Origin/Referer like /claude-api — see People Discovery below)
 ```
 
 ---
@@ -194,6 +204,7 @@ Cost: ~$0.001/email with Haiku (classification only runs once per thread-update,
 - Deploy Google Apps Script email pipeline (script.google.com)
 - Download Granola + connect Google Calendar
 - Install LeetNotion VS Code extension for LC → Notion sync
+- **Discover tab:** add `EXA_API_KEY` to the root `.env` (dev proxy loads env from repo root) and to Vercel's encrypted env vars (prod). Get it at https://dashboard.exa.ai/api-keys. Without it, "Find people" 401s.
 
 **Done:** Google Calendar OAuth (`GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`/`GOOGLE_REFRESH_TOKEN` are in `.env` — Cloud Console project is `recruitingos`; OAuth consent screen is in Testing mode, so **only the Google account added as a test user can authorize this app** — `ethansaba12@gmail.com` is added; add any other account there too before it can use "+ Event"). Verified end-to-end: created and deleted a real Calendar event both via a direct API call and via the dev-mode `/google-calendar` proxy. **Still needed for production**: add the same 3 env vars to Vercel's encrypted env vars, or the deployed app's "+ Event" won't be able to create events (only local dev works right now).
 

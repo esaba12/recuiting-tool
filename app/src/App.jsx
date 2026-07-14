@@ -15,6 +15,7 @@ import GitHubTab from './components/jobBoards/GitHubTab.jsx'
 import AddToCalendarModal from './components/AddToCalendarModal.jsx'
 import QuickScheduleModal from './components/QuickScheduleModal.jsx'
 import ReferralCoverageTab from './components/ReferralCoverageTab.jsx'
+import DiscoverTab from './components/DiscoverTab.jsx'
 import { Table2, LayoutGrid, Share2, Target } from 'lucide-react'
 
 // ── Network Tab ───────────────────────────────────────────────────────────────
@@ -228,6 +229,9 @@ export default function App() {
       )}
       {!loading && tab === 'network'  && (
         <NetworkTab contacts={contacts} apps={apps} interactions={interactions} onRefresh={load} initialView={networkInitialView} />
+      )}
+      {!loading && tab === 'discover' && (
+        <DiscoverTab contacts={contacts} apps={apps} interactions={interactions} onRefresh={load} />
       )}
       {!loading && tab === 'pipeline' && <PipelineTab apps={apps} onRefresh={load} />}
       {!loading && tab === 'actions'  && <ActionsTab contacts={contacts} apps={apps} interactions={interactions} onRefresh={load} />}

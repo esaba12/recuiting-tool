@@ -108,6 +108,22 @@ export default defineConfig(({ mode }) => {
             })
           },
         },
+        '/exa': {
+          target: 'https://api.exa.ai',
+          changeOrigin: true,
+          rewrite: p => p.replace(/^\/exa/, ''),
+          headers: {
+            'x-api-key': env.EXA_API_KEY || '',
+          },
+          // Strip browser Origin/Referer before forwarding — same precaution as
+          // /claude-api above, in case Exa rejects apparent direct-browser calls.
+          configure: (proxy) => {
+            proxy.on('proxyReq', (proxyReq) => {
+              proxyReq.removeHeader('origin')
+              proxyReq.removeHeader('referer')
+            })
+          },
+        },
       },
     },
   }
