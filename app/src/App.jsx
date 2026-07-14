@@ -16,7 +16,8 @@ import AddToCalendarModal from './components/AddToCalendarModal.jsx'
 import QuickScheduleModal from './components/QuickScheduleModal.jsx'
 import ReferralCoverageTab from './components/ReferralCoverageTab.jsx'
 import OutboxTab from './components/OutboxTab.jsx'
-import { Table2, LayoutGrid, Share2, Target, Send } from 'lucide-react'
+import DiscoverTab from './components/DiscoverTab.jsx'
+import { Table2, LayoutGrid, Share2, Target, Send, UserSearch } from 'lucide-react'
 
 // ── Network Tab ───────────────────────────────────────────────────────────────
 
@@ -26,6 +27,7 @@ const NETWORK_VIEWS = [
   { key: 'graph',    label: 'Graph',    icon: Share2 },
   { key: 'coverage', label: 'Coverage', icon: Target },
   { key: 'outbox',   label: 'Outbox',   icon: Send },
+  { key: 'discover', label: 'Discover', icon: UserSearch },
 ]
 
 function NetworkTab({ contacts, apps, interactions, onRefresh, initialView = 'table' }) {
@@ -88,7 +90,9 @@ function NetworkTab({ contacts, apps, interactions, onRefresh, initialView = 'ta
         </div>
       </div>
 
-      {view === 'coverage'
+      {view === 'discover'
+        ? <DiscoverTab contacts={contacts} apps={apps} interactions={interactions} onRefresh={onRefresh} />
+        : view === 'coverage'
         ? <ReferralCoverageTab contacts={contacts} apps={apps} interactions={interactions} onRefresh={onRefresh} />
         : view === 'graph'
         ? <NetworkGraphTab contacts={contacts} />

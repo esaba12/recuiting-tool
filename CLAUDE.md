@@ -21,7 +21,7 @@ A zero-touch recruiting OS for a student's SWE/PM internship search. Calls, emai
 | Google Calendar API | Screenshot/text → calendar event, via OAuth | ✅ Live in dev · 🔄 needs env vars added to Vercel for production |
 | Granola | Call transcription (no bot) | 🔄 Download + connect |
 | LeetNotion extension | LeetCode → Notion auto-sync | 🔄 Pending install |
-| Exa ($250 YC credits) | Contact enrichment — LinkedIn lookup | 🔄 Planned |
+| Exa | People discovery (Discover tab) — public-web people search | ✅ Wired via serverless proxy · needs a (free) Exa account key |
 
 **Abandoned:** Gumloop (BYOK requires $37/mo Pro plan), Cowork/Claude Desktop scheduled tasks
 
@@ -116,7 +116,7 @@ Architecture note: unlike `api/notion.js`/`api/claude-api.js` (static bearer tok
 
 ### Tabs (5 top-level, down from 8 — see Networking Tracker below)
 - **Overview** — Notion contacts needing follow-up, application stats, amber "N jobs need review" nudge, staggered KPI-card reveal on mount
-- **Network** — Contact CRM from Contacts DB. Three view modes via a segmented control: **Table** (`ContactsTable.jsx`, `@tanstack/react-table`, default), **Cards**, and **Graph** (`NetworkGraphTab.jsx`, `react-force-graph-2d` — force-directed graph of contacts colored by Status + companies derived from the Company field, "Referred By" edges). Add/edit contacts via `ContactDetailModal.jsx` (Status, Urgency, Referred By, Follow-Up Date, plus a "+ Log" affordance that opens `LogInteractionModal.jsx` pre-filled with that contact). Top-level "+ Log Interaction" button opens the same modal unfilled. Every contact shows an expandable interaction History panel from the Interactions DB.
+- **Network** — Contact CRM from Contacts DB. Five view modes via a segmented control: **Table** (`ContactsTable.jsx`, `@tanstack/react-table`, default), **Cards**, **Graph** (`NetworkGraphTab.jsx`, `react-force-graph-2d` — force-directed graph of contacts colored by Status + companies derived from the Company field, "Referred By" edges), **Coverage** (`ReferralCoverageTab.jsx` — target-company gaps), and **Discover** (`DiscoverTab.jsx` — people discovery; see its own section below). Add/edit contacts via `ContactDetailModal.jsx` (Status, Urgency, Referred By, Follow-Up Date, plus a "+ Log" affordance that opens `LogInteractionModal.jsx` pre-filled with that contact). Top-level "+ Log Interaction" button opens the same modal unfilled. Every contact shows an expandable interaction History panel from the Interactions DB.
 - **Pipeline** — Application tracker from Applications DB, stage funnel, `DuplicatesPanel` (see below)
 - **Actions** — Overdue follow-ups, stale applications, high-urgency contacts
 - **Job Boards** — GitHub job board parser (paste repo URL → parse README tables), auto-import, triage buckets, calendar/stats views
@@ -126,6 +126,19 @@ What used to be 3 separate top-level tabs (Graph, LinkedIn, Calls) plus a Quick 
 - **Call** and **LinkedIn**: paste-box + "Extract with Claude" (same extraction prompts as the old separate tabs). Call additionally shows Key Insights/My Commitments/Follow-Up Draft fields and writes to **both** the Calls DB (`addCallEntry`) and the Interactions DB — the original `CallsTab` only wrote Calls DB and never logged to Interactions, which was an inconsistency with the Interactions DB's own documented purpose ("every call... gets one row here"); the unified modal fixes that gap.
 - **Meeting / Email / Other**: no transcript step, just contact/date/duration/notes → Interactions DB only.
 - LinkedIn logging remains deliberately manual — no scraping/automation tooling (real LinkedIn account-ban risk for automated message capture).
+
+### Discover — people discovery (Network → Discover view; shipped July 2026)
+A **view inside the Network tab** (segmented control, next to Coverage — not a top-level tab). Finds *new* people to reach out to at target companies, ranked by warm-tie signals from Ethan's résumé + reachability. Complements Coverage (which only flags *whether* a gap exists) by actually sourcing the people to close it. Uses the **same** `rec_target_companies` list as Coverage.
+
+**Data source — compliance boundary (important):** all people come from **Exa's public-web search index** (`app/src/lib/exa.js` → `/exa` proxy → `api.exa.ai`). This is a search engine over the open web — it never scrapes or logs into LinkedIn. LinkedIn URLs it surfaces are treated as **reference links only** (the app links out, never programmatically fetches linkedin.com). This is the deliberate extension of the "no LinkedIn scraping/automation" stance above. `EXA_API_KEY` is server-side only (Vercel env + `.env`), like every other key.
+
+**Hands-off scheduler (`lib/discoveryScheduler.js`):** the default **✨ Recommended** view auto-refreshes in the background — on mount, if `rec_discovery_meta.lastCheck !== today`, it silently runs discovery for the highest-priority *due* companies and shows a "N new people found" nudge. `dueCompanies()` picks them: coverage `gap`/`weak` only (never `strong`), **applied-to companies first** (matched against the Applications DB), filtered by a per-company **cooldown** (default 7d) and capped at a **daily budget** (default 3) — both editable in the ⚙ settings. A manual **↻ Refresh now** forces a full re-scan (ignores cooldown/budget). Concurrency-limited to 3.
+
+**Token minimization (first-class):** the daily *check* is a cheap date compare; real Exa/Claude spend is throttled by cooldown + budget. Biggest saver: `discoverPeople()` hashes the Exa result URLs (`hashUrls`) and **skips the Claude extraction entirely when the same pages come back** (`skippedExtraction`, reusing cached people). It also drops `knownUrls` (profile URLs already in Contacts) before extraction so tokens aren't spent re-structuring people you already have. Typical steady state: 0–3 Exa searches/day (~2¢), often zero Claude calls.
+
+**Ranking (`lib/discovery.js` `discoveryScore()`):** a **pre-contact** scorer (affinity.js can't rank strangers: no interaction history → everyone buckets cold/0). Scores résumé-signal overlap (user-weighted: past employer > program > university > hometown), reachability × relevance (reachable ICs/recruiters up, VPs down), and **"next best person"** coverage (first contact at a gap company, or a *different-role* person where you already know someone — name-dedup sinks people already in Contacts). The Recommended list breaks score ties toward applied-to companies.
+
+**UI (`components/DiscoverTab.jsx`):** collapsible **background-signals profile** editor (`rec_affinity_profile`, seeded with UMich), the **✨ Recommended** ranked list (across all companies) as default, plus a **By company** view with a per-company "Find people" manual override. Discovered people are a **staging queue** (`rec_discovered`) — nothing hits Notion until **+ Add to Contacts** (dedups via `searchContactByName`, then `addContact` + `updateContact` writing `linkedin`/`Notable Affinity`/`Is UMich Alum`, status Cold). **✎ Draft intro** reuses `lib/drafting.js`'s `draftMessage` (`kind:"cold_open"`, personalization seeded from matched signals). Dismissed/added candidates persist so refreshes don't resurface them. localStorage keys: `rec_discovered`, `rec_discovered_dismissed`, `rec_discovered_added`, `rec_discovery_meta`, `rec_discovery_settings`, `rec_affinity_profile`.
 
 ### Job Boards Tab (most-developed feature)
 - Input: GitHub repo URL (e.g., `github.com/speedyapply/2027-SWE-College-Jobs`) or username
@@ -148,6 +161,7 @@ What used to be 3 separate top-level tabs (Graph, LinkedIn, Calls) plus a Quick 
 /gh-contrib      → github-contributions-api.jogruber.de
 /claude-api      → api.anthropic.com           (injects ANTHROPIC_API_KEY; strips incoming Origin/Referer — see Known Issues)
 /google-calendar → www.googleapis.com          (mints an access token from GOOGLE_REFRESH_TOKEN first, then forwards)
+/exa             → api.exa.ai                  (injects EXA_API_KEY; strips Origin/Referer like /claude-api — see People Discovery below)
 ```
 
 ---
@@ -194,6 +208,7 @@ Cost: ~$0.001/email with Haiku (classification only runs once per thread-update,
 - Deploy Google Apps Script email pipeline (script.google.com)
 - Download Granola + connect Google Calendar
 - Install LeetNotion VS Code extension for LC → Notion sync
+- **Discover tab:** add `EXA_API_KEY` to the root `.env` (dev proxy loads env from repo root) and to Vercel's encrypted env vars (prod). Get it at https://dashboard.exa.ai/api-keys. Without it, "Find people" 401s.
 
 **Done:** Google Calendar OAuth (`GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`/`GOOGLE_REFRESH_TOKEN` are in `.env` — Cloud Console project is `recruitingos`; OAuth consent screen is in Testing mode, so **only the Google account added as a test user can authorize this app** — `ethansaba12@gmail.com` is added; add any other account there too before it can use "+ Event"). Verified end-to-end: created and deleted a real Calendar event both via a direct API call and via the dev-mode `/google-calendar` proxy. **Still needed for production**: add the same 3 env vars to Vercel's encrypted env vars, or the deployed app's "+ Event" won't be able to create events (only local dev works right now).
 
