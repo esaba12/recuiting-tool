@@ -43,14 +43,40 @@ export async function exaSearch({ query, numResults = 15, includeDomains }) {
   return data.results || []
 }
 
-// company + roles + profile -> structured Person[] ready for discoveryScore().
+export const normUrl = u => (u || '').trim().toLowerCase().replace(/\/+$/, '').replace(/[?#].*$/, '')
+
+// Stable 32-bit FNV-1a hash of the (sorted, normalized) result URLs — lets the caller
+// detect when Exa surfaced the *same* pages as last time and skip the (token-costly)
+// Claude extraction entirely. This is the biggest token saver in the hands-off refresh.
+export function hashUrls(urls) {
+  const key = [...new Set((urls || []).map(normUrl).filter(Boolean))].sort().join('|')
+  let h = 0x811c9dc5
+  for (let i = 0; i < key.length; i++) { h ^= key.charCodeAt(i); h = Math.imul(h, 0x01000193) }
+  return (h >>> 0).toString(16)
+}
+
+// company + roles + profile -> structured people ready for discoveryScore().
+// Token-frugal: if `priorResultHash` matches this run's result URLs, returns
+// `{ people: null, skippedExtraction: true }` (caller keeps its cached people, no Claude
+// call). `knownUrls` (a Set of already added/dismissed profile URLs) is dropped before
+// extraction so we never spend tokens re-structuring people you've already handled.
 // Person shape: { name, title, company, school, pastCompanies[], programs[], linkedinUrl }
-export async function discoverPeople({ company, roles, profile }) {
+export async function discoverPeople({ company, roles, profile, priorResultHash = null, knownUrls = null }) {
   const query = buildQuery({ company, roles, profile })
   const results = await exaSearch({ query })
-  if (!results.length) return []
+  const resultHash = hashUrls(results.map(r => r.url))
 
-  const digest = results.slice(0, 15)
+  if (!results.length) return { people: [], resultHash, skippedExtraction: false }
+  if (priorResultHash && resultHash === priorResultHash) {
+    return { people: null, resultHash, skippedExtraction: true }
+  }
+
+  const usable = (knownUrls && knownUrls.size)
+    ? results.filter(r => !knownUrls.has(normUrl(r.url)))
+    : results
+  if (!usable.length) return { people: [], resultHash, skippedExtraction: false }
+
+  const digest = usable.slice(0, 15)
     .map((r, i) => `[${i}] url: ${r.url}\ntitle: ${r.title || ''}\n${(r.summary || r.text || '').slice(0, 900)}`)
     .join('\n\n')
 
@@ -77,5 +103,5 @@ ${digest}
 }`
 
   const parsed = await claudeJSON({ model: CLAUDE_MODELS.HAIKU, content, maxTokens: 1500 })
-  return (parsed.people || []).filter(p => p?.name)
+  return { people: (parsed.people || []).filter(p => p?.name), resultHash, skippedExtraction: false }
 }

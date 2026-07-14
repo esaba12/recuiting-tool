@@ -1,17 +1,23 @@
-import { useState } from 'react'
-import { lsGet, lsSet } from './jobBoards/helpers.js'
+import { useState, useEffect, useMemo, useRef } from 'react'
+import { lsGet, lsSet, timeAgo } from './jobBoards/helpers.js'
 import { normalizeCompanyName } from '../lib/networkGraph.js'
-import { discoverPeople } from '../lib/exa.js'
+import { discoverPeople, normUrl } from '../lib/exa.js'
+import { dueCompanies, coverageStatus, todayStr } from '../lib/discoveryScheduler.js'
 import { rankCandidates, DEFAULT_PROFILE, DEFAULT_WEIGHTS, roleCategory, affinityTagsFor } from '../lib/discovery.js'
 import { draftMessage } from '../lib/drafting.js'
 import { addContact, updateContact, searchContactByName } from '../notion.js'
 import { Badge, EmptyState } from '../shared.jsx'
 
-const PROFILE_KEY   = 'rec_affinity_profile'
-const TARGETS_KEY   = 'rec_target_companies' // shared with ReferralCoverageTab
+const PROFILE_KEY    = 'rec_affinity_profile'
+const TARGETS_KEY    = 'rec_target_companies' // shared with ReferralCoverageTab
 const DISCOVERED_KEY = 'rec_discovered'        // { [companyKey]: rankedCandidate[] }
 const DISMISSED_KEY  = 'rec_discovered_dismissed' // string[] of candidate keys
 const ADDED_KEY      = 'rec_discovered_added'      // string[] of candidate keys
+const META_KEY       = 'rec_discovery_meta'        // { lastCheck, perCompany: { [key]: { lastRun, resultHash, count } } }
+const SETTINGS_KEY   = 'rec_discovery_settings'    // { cooldownDays, dailyBudget }
+
+const DEFAULT_SETTINGS = { cooldownDays: 7, dailyBudget: 3 }
+const CONCURRENCY = 3
 
 // Broad-but-ranked scope (user decision): cast wide across roles, let discoveryScore sort.
 const DISCOVER_ROLES = ['software engineer', 'engineering manager', 'technical recruiter', 'product manager']
@@ -31,19 +37,26 @@ function personalizationSeed(person, reasons) {
 
 export default function DiscoverTab({ contacts, apps, interactions, onRefresh }) {
   const [profile, setProfile]     = useState(() => ({ ...DEFAULT_PROFILE, ...(lsGet(PROFILE_KEY) || {}), weights: { ...DEFAULT_WEIGHTS, ...(lsGet(PROFILE_KEY)?.weights || {}) } }))
-  const [editingProfile, setEditingProfile] = useState(() => !lsGet(PROFILE_KEY))
+  const [editingProfile, setEditingProfile] = useState(false)
   const [targets]                 = useState(() => lsGet(TARGETS_KEY) || [])
   const [discovered, setDiscovered] = useState(() => lsGet(DISCOVERED_KEY) || {})
   const [dismissed, setDismissed] = useState(() => new Set(lsGet(DISMISSED_KEY) || []))
   const [added, setAdded]         = useState(() => new Set(lsGet(ADDED_KEY) || []))
+  const [meta, setMeta]           = useState(() => lsGet(META_KEY) || { lastCheck: null, perCompany: {} })
+  const [settings, setSettings]   = useState(() => ({ ...DEFAULT_SETTINGS, ...(lsGet(SETTINGS_KEY) || {}) }))
+  const [view, setView]           = useState('recommended') // 'recommended' | 'byCompany'
+  const [showSettings, setShowSettings] = useState(false)
   const [loadingCompany, setLoadingCompany] = useState(null)
   const [errorFor, setErrorFor]   = useState({})
-  const [view, setView]           = useState('byCompany') // 'byCompany' | 'top'
+  const [running, setRunning]     = useState(false)
+  const [progress, setProgress]   = useState(null) // { done, total } during a background run
+  const [newCount, setNewCount]   = useState(null) // people found on the last run
+  const ranRef = useRef(false)     // guard the once-per-mount background kick
 
-  function saveProfile(next) {
-    setProfile(next); lsSet(PROFILE_KEY, next); setEditingProfile(false)
-  }
   function persistDiscovered(next) { setDiscovered(next); lsSet(DISCOVERED_KEY, next) }
+  function persistMeta(next) { setMeta(next); lsSet(META_KEY, next) }
+  function saveProfile(next) { setProfile(next); lsSet(PROFILE_KEY, next); setEditingProfile(false) }
+  function saveSettings(next) { setSettings(next); lsSet(SETTINGS_KEY, next) }
   function dismiss(key) {
     const next = new Set(dismissed); next.add(key); setDismissed(next); lsSet(DISMISSED_KEY, [...next])
   }
@@ -56,12 +69,83 @@ export default function DiscoverTab({ contacts, apps, interactions, onRefresh })
     return contacts.filter(c => c.company?.trim() && normalizeCompanyName(c.company) === key)
   }
 
+  // Profile URLs we already have as contacts — dropped before Claude extraction so we never
+  // spend tokens re-structuring people already in the CRM (token minimization).
+  const knownUrls = useMemo(
+    () => new Set(contacts.map(c => c.linkedin).filter(Boolean).map(normUrl)),
+    [contacts],
+  )
+
+  const isLive = (c) => !c.isDuplicate
+    && !dismissed.has(candKey(c.person.company, c.person.name))
+    && !added.has(candKey(c.person.company, c.person.name))
+
+  // Runs the scheduler over the due companies. force=true (manual "Refresh now") ignores the
+  // per-company cooldown + daily budget so the whole list can re-scan on demand.
+  async function runScheduler({ force = false } = {}) {
+    if (running || !targets.length) return
+    const due = dueCompanies(targets, contacts, apps, interactions, meta, {
+      cooldownDays: force ? 0 : settings.cooldownDays,
+      dailyBudget: force ? targets.length : settings.dailyBudget,
+    })
+    if (!due.length) { persistMeta({ ...meta, lastCheck: todayStr() }); setNewCount(0); return }
+
+    setRunning(true); setProgress({ done: 0, total: due.length }); setNewCount(null)
+    const nextDiscovered = { ...discovered }
+    const nextPerCompany = { ...(meta.perCompany || {}) }
+    let found = 0
+    const queue = [...due]
+
+    async function worker() {
+      while (queue.length) {
+        const item = queue.shift()
+        try {
+          const { people, resultHash, skippedExtraction } = await discoverPeople({
+            company: item.company, roles: DISCOVER_ROLES, profile,
+            priorResultHash: item.priorResultHash, knownUrls,
+          })
+          if (!skippedExtraction && people) {
+            const ranked = rankCandidates(people, profile, contactsAt(item.company))
+            nextDiscovered[item.key] = ranked
+            found += ranked.filter(isLive).length
+          }
+          nextPerCompany[item.key] = { lastRun: Date.now(), resultHash, count: (nextDiscovered[item.key] || []).length }
+        } catch (e) {
+          setErrorFor(prev => ({ ...prev, [item.company]: e.message }))
+        } finally {
+          setProgress(p => ({ done: (p?.done || 0) + 1, total: due.length }))
+        }
+      }
+    }
+    await Promise.all(Array.from({ length: CONCURRENCY }, worker))
+
+    persistDiscovered(nextDiscovered)
+    persistMeta({ lastCheck: todayStr(), perCompany: nextPerCompany })
+    setNewCount(found); setRunning(false); setProgress(null)
+  }
+
+  // Hands-off daily gate: on first mount, if we haven't checked today, quietly refresh the
+  // highest-priority due companies in the background. The cooldown/budget inside the
+  // scheduler keep this cheap even though the *check* happens every day.
+  useEffect(() => {
+    if (ranRef.current) return
+    ranRef.current = true
+    if (targets.length && meta.lastCheck !== todayStr()) runScheduler({ force: false })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Manual per-company search (By company view) — still respects the resultHash skip.
   async function findPeople(company) {
     setLoadingCompany(company); setErrorFor(e => ({ ...e, [company]: null }))
     try {
-      const people = await discoverPeople({ company, roles: DISCOVER_ROLES, profile })
-      const ranked = rankCandidates(people, profile, contactsAt(company))
-      persistDiscovered({ ...discovered, [normalizeCompanyName(company)]: ranked })
+      const key = normalizeCompanyName(company)
+      const prior = meta.perCompany?.[key]?.resultHash || null
+      const { people, resultHash, skippedExtraction } = await discoverPeople({ company, roles: DISCOVER_ROLES, profile, priorResultHash: prior, knownUrls })
+      const nextDiscovered = (!skippedExtraction && people)
+        ? { ...discovered, [key]: rankCandidates(people, profile, contactsAt(company)) }
+        : discovered
+      if (nextDiscovered !== discovered) persistDiscovered(nextDiscovered)
+      persistMeta({ ...meta, perCompany: { ...(meta.perCompany || {}), [key]: { lastRun: Date.now(), resultHash, count: (nextDiscovered[key] || []).length } } })
     } catch (e) {
       setErrorFor(prev => ({ ...prev, [company]: e.message }))
     } finally {
@@ -69,20 +153,39 @@ export default function DiscoverTab({ contacts, apps, interactions, onRefresh })
     }
   }
 
-  // Company rows: gaps first, same coverage logic as ReferralCoverageTab.
+  // Applied-to company keys — used to nudge prospects at companies you're pursuing up the list.
+  const appliedKeys = useMemo(
+    () => new Set(apps.filter(a => a.company?.trim() && a.stage !== 'Rejected').map(a => normalizeCompanyName(a.company))),
+    [apps],
+  )
+
+  // "Recommended for you" — every live candidate across all companies, best first, with
+  // applied-to companies breaking ties upward.
+  const recommended = Object.values(discovered)
+    .flat()
+    .filter(isLive)
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score
+      const aApp = appliedKeys.has(normalizeCompanyName(a.person.company)) ? 1 : 0
+      const bApp = appliedKeys.has(normalizeCompanyName(b.person.company)) ? 1 : 0
+      return bApp - aApp
+    })
+
+  // By-company rows: gaps first (coverage), then covered.
   const rows = targets
     .map(company => {
-      const matched = contactsAt(company)
-      const ranked = discovered[normalizeCompanyName(company)] || null
-      return { company, matchedCount: matched.length, ranked, status: matched.length === 0 ? 'gap' : 'covered' }
+      const status = coverageStatus(company, contacts, interactions)
+      return { company, status, ranked: discovered[normalizeCompanyName(company)] || null, matchedCount: contactsAt(company).length }
     })
-    .sort((a, b) => ({ gap: 0, covered: 1 }[a.status]) - ({ gap: 0, covered: 1 }[b.status]))
+    .sort((a, b) => ({ gap: 0, weak: 1, strong: 2 }[a.status]) - ({ gap: 0, weak: 1, strong: 2 }[b.status]))
 
-  // Global "top prospects" — every ranked, non-dismissed, non-duplicate candidate, best first.
-  const topProspects = Object.entries(discovered)
-    .flatMap(([, ranked]) => ranked)
-    .filter(c => !c.isDuplicate && !dismissed.has(candKey(c.person.company, c.person.name)))
-    .sort((a, b) => b.score - a.score)
+  const lastRunMs = Math.max(0, ...Object.values(meta.perCompany || {}).map(v => v.lastRun || 0))
+  const cardProps = (c) => ({
+    cand: c, profile,
+    isAdded: added.has(candKey(c.person.company, c.person.name)),
+    onDismiss: () => dismiss(candKey(c.person.company, c.person.name)),
+    onAdded: () => { markAdded(candKey(c.person.company, c.person.name)); onRefresh() },
+  })
 
   return (
     <div className="space-y-4">
@@ -98,65 +201,90 @@ export default function DiscoverTab({ contacts, apps, interactions, onRefresh })
         <EmptyState msg="Add a target-company list in Network → Coverage first — Discover uses the same list." />
       ) : (
         <>
-          <div className="flex items-center gap-2">
+          {/* Header: view switch + status + manual refresh */}
+          <div className="flex items-center gap-2 flex-wrap">
             <div className="flex border border-ink-200 rounded-full overflow-hidden text-xs font-medium">
-              {[['byCompany', 'By company'], ['top', `Top prospects${topProspects.length ? ` (${topProspects.length})` : ''}`]].map(([k, label]) => (
+              {[['recommended', `✨ Recommended${recommended.length ? ` (${recommended.length})` : ''}`], ['byCompany', 'By company']].map(([k, label]) => (
                 <button key={k} onClick={() => setView(k)}
                   className={`px-3 py-1 transition-colors ${view === k ? 'bg-ink-900 text-white' : 'bg-white text-ink-500 hover:bg-ink-50'}`}>
                   {label}
                 </button>
               ))}
             </div>
+            <div className="ml-auto flex items-center gap-2">
+              <span className="text-[11px] text-ink-400">
+                {running ? `Searching ${progress?.done ?? 0}/${progress?.total ?? '…'}…` : lastRunMs ? `Updated ${timeAgo(new Date(lastRunMs).toISOString())}` : 'Not run yet'}
+              </span>
+              <button onClick={() => runScheduler({ force: true })} disabled={running}
+                className="px-3 py-1 bg-white border border-ink-200 rounded-full text-xs font-medium text-ink-600 hover:border-accent-300 disabled:opacity-40">
+                ↻ Refresh now
+              </button>
+              <button onClick={() => setShowSettings(s => !s)}
+                className="px-2 py-1 bg-white border border-ink-200 rounded-full text-xs font-medium text-ink-400 hover:border-accent-300">⚙</button>
+            </div>
           </div>
 
-          {view === 'byCompany' ? (
-            <div className="space-y-3">
-              {rows.map(r => (
-                <div key={r.company} className={`bg-white rounded-xl p-4 shadow-sm border ${r.status === 'gap' ? 'border-danger-200' : 'border-ink-100'}`}>
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-ink-900">{r.company}</span>
-                      {r.status === 'gap'
-                        ? <Badge label="No contact yet" color="bg-danger-100 text-danger-700" />
-                        : <Badge label={`${r.matchedCount} contact${r.matchedCount !== 1 ? 's' : ''} — find the next`} color="bg-ink-100 text-ink-600" />}
-                    </div>
-                    <button onClick={() => findPeople(r.company)} disabled={loadingCompany === r.company}
-                      className="shrink-0 px-3 py-1.5 bg-accent-600 text-white rounded-full text-xs font-medium hover:bg-accent-700 disabled:opacity-40">
-                      {loadingCompany === r.company ? 'Searching…' : r.ranked ? '↻ Re-run' : '🔍 Find people'}
-                    </button>
-                  </div>
-                  {errorFor[r.company] && (
-                    <div className="mt-2 p-2 bg-danger-50 border border-danger-200 rounded-lg text-xs text-danger-700">{errorFor[r.company]}</div>
-                  )}
-                  {r.ranked && (
-                    <div className="mt-3 space-y-2">
-                      {r.ranked.filter(c => !c.isDuplicate && !dismissed.has(candKey(c.person.company, c.person.name))).length === 0 ? (
-                        <p className="text-xs text-ink-400">No new people to surface — try Re-run or widen your target roles.</p>
-                      ) : r.ranked
-                        .filter(c => !c.isDuplicate && !dismissed.has(candKey(c.person.company, c.person.name)))
-                        .map(c => (
-                          <CandidateCard key={candKey(c.person.company, c.person.name)}
-                            cand={c} profile={profile}
-                            isAdded={added.has(candKey(c.person.company, c.person.name))}
-                            onDismiss={() => dismiss(candKey(c.person.company, c.person.name))}
-                            onAdded={() => { markAdded(candKey(c.person.company, c.person.name)); onRefresh() }} />
-                        ))}
-                    </div>
-                  )}
-                </div>
-              ))}
+          {newCount != null && !running && (
+            <p className="text-xs text-accent-700 font-medium">
+              {newCount > 0 ? `✨ ${newCount} new ${newCount === 1 ? 'person' : 'people'} found.` : 'No new people this refresh — you’re caught up.'}
+            </p>
+          )}
+
+          {showSettings && (
+            <div className="flex items-center gap-4 rounded-xl border border-ink-100 bg-white p-3 text-xs">
+              <span className="text-ink-500">Hands-off refresh runs daily, but each company is only re-searched on a cooldown.</span>
+              <label className="flex items-center gap-1.5 ml-auto">Cooldown (days)
+                <input type="number" min="1" value={settings.cooldownDays}
+                  onChange={e => saveSettings({ ...settings, cooldownDays: Math.max(1, Number(e.target.value) || 1) })}
+                  className="w-14 px-2 py-1 border border-ink-200 rounded-lg" />
+              </label>
+              <label className="flex items-center gap-1.5">Companies/day
+                <input type="number" min="1" value={settings.dailyBudget}
+                  onChange={e => saveSettings({ ...settings, dailyBudget: Math.max(1, Number(e.target.value) || 1) })}
+                  className="w-14 px-2 py-1 border border-ink-200 rounded-lg" />
+              </label>
+            </div>
+          )}
+
+          {view === 'recommended' ? (
+            <div className="space-y-2">
+              {recommended.length === 0
+                ? <EmptyState msg={running ? 'Looking for people…' : 'No recommendations yet — hit “Refresh now” to search your gap companies.'} />
+                : recommended.map(c => <CandidateCard key={candKey(c.person.company, c.person.name)} showCompany {...cardProps(c)} />)}
             </div>
           ) : (
-            <div className="space-y-2">
-              {topProspects.length === 0
-                ? <EmptyState msg="Run 'Find people' on a few companies — your best prospects across all of them rank here." />
-                : topProspects.map(c => (
-                  <CandidateCard key={candKey(c.person.company, c.person.name)}
-                    cand={c} profile={profile} showCompany
-                    isAdded={added.has(candKey(c.person.company, c.person.name))}
-                    onDismiss={() => dismiss(candKey(c.person.company, c.person.name))}
-                    onAdded={() => { markAdded(candKey(c.person.company, c.person.name)); onRefresh() }} />
-                ))}
+            <div className="space-y-3">
+              {rows.map(r => {
+                const live = (r.ranked || []).filter(isLive)
+                return (
+                  <div key={r.company} className={`bg-white rounded-xl p-4 shadow-sm border ${r.status === 'gap' ? 'border-danger-200' : r.status === 'weak' ? 'border-warning-200' : 'border-ink-100'}`}>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-ink-900">{r.company}</span>
+                        {r.status === 'gap'
+                          ? <Badge label="No contact yet" color="bg-danger-100 text-danger-700" />
+                          : r.status === 'weak'
+                          ? <Badge label={`${r.matchedCount} contact${r.matchedCount !== 1 ? 's' : ''} · weak — find the next`} color="bg-warning-100 text-warning-800" />
+                          : <Badge label={`${r.matchedCount} contact${r.matchedCount !== 1 ? 's' : ''}`} color="bg-success-100 text-success-800" />}
+                      </div>
+                      <button onClick={() => findPeople(r.company)} disabled={loadingCompany === r.company}
+                        className="shrink-0 px-3 py-1.5 bg-accent-600 text-white rounded-full text-xs font-medium hover:bg-accent-700 disabled:opacity-40">
+                        {loadingCompany === r.company ? 'Searching…' : r.ranked ? '↻ Re-run' : '🔍 Find people'}
+                      </button>
+                    </div>
+                    {errorFor[r.company] && (
+                      <div className="mt-2 p-2 bg-danger-50 border border-danger-200 rounded-lg text-xs text-danger-700">{errorFor[r.company]}</div>
+                    )}
+                    {r.ranked && (
+                      <div className="mt-3 space-y-2">
+                        {live.length === 0
+                          ? <p className="text-xs text-ink-400">No new people to surface — try Re-run or widen your target roles.</p>
+                          : live.map(c => <CandidateCard key={candKey(c.person.company, c.person.name)} {...cardProps(c)} />)}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           )}
         </>

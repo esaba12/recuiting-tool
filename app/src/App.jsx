@@ -16,7 +16,7 @@ import AddToCalendarModal from './components/AddToCalendarModal.jsx'
 import QuickScheduleModal from './components/QuickScheduleModal.jsx'
 import ReferralCoverageTab from './components/ReferralCoverageTab.jsx'
 import DiscoverTab from './components/DiscoverTab.jsx'
-import { Table2, LayoutGrid, Share2, Target } from 'lucide-react'
+import { Table2, LayoutGrid, Share2, Target, UserSearch } from 'lucide-react'
 
 // ── Network Tab ───────────────────────────────────────────────────────────────
 
@@ -25,6 +25,7 @@ const NETWORK_VIEWS = [
   { key: 'cards',    label: 'Cards',    icon: LayoutGrid },
   { key: 'graph',    label: 'Graph',    icon: Share2 },
   { key: 'coverage', label: 'Coverage', icon: Target },
+  { key: 'discover', label: 'Discover', icon: UserSearch },
 ]
 
 function NetworkTab({ contacts, apps, interactions, onRefresh, initialView = 'table' }) {
@@ -87,7 +88,9 @@ function NetworkTab({ contacts, apps, interactions, onRefresh, initialView = 'ta
         </div>
       </div>
 
-      {view === 'coverage'
+      {view === 'discover'
+        ? <DiscoverTab contacts={contacts} apps={apps} interactions={interactions} onRefresh={onRefresh} />
+        : view === 'coverage'
         ? <ReferralCoverageTab contacts={contacts} apps={apps} interactions={interactions} onRefresh={onRefresh} />
         : view === 'graph'
         ? <NetworkGraphTab contacts={contacts} />
@@ -229,9 +232,6 @@ export default function App() {
       )}
       {!loading && tab === 'network'  && (
         <NetworkTab contacts={contacts} apps={apps} interactions={interactions} onRefresh={load} initialView={networkInitialView} />
-      )}
-      {!loading && tab === 'discover' && (
-        <DiscoverTab contacts={contacts} apps={apps} interactions={interactions} onRefresh={load} />
       )}
       {!loading && tab === 'pipeline' && <PipelineTab apps={apps} onRefresh={load} />}
       {!loading && tab === 'actions'  && <ActionsTab contacts={contacts} apps={apps} interactions={interactions} onRefresh={load} />}

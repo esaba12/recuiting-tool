@@ -3,7 +3,6 @@ import { NAV_ICON, REFRESH_ICON, CALENDAR_ICON, SCHEDULE_ICON } from '../../lib/
 const NAV_ITEMS = [
   { id: 'overview', label: 'Overview' },
   { id: 'network',  label: 'Network' },
-  { id: 'discover', label: 'Discover' },
   { id: 'pipeline', label: 'Pipeline' },
   { id: 'actions',  label: 'Actions' },
   { id: 'calendar', label: 'Calendar' },
