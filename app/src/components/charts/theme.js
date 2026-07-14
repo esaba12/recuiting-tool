@@ -33,3 +33,16 @@ export const STATUS_CHART_COLORS = {
 export const CHART_GRID = '#e9e9eb'   // ink-100
 export const CHART_AXIS_TEXT = '#64646d' // ink-500
 export const CHART_SURFACE = '#fbf9f5'   // canvas
+
+// Dark "graph canvas" palette — the Network Graph view is an intentional self-contained
+// dark island (matches the existing dark sidebar's ink-900 surface), not a general app
+// dark mode (index.css's darkMode variant stays unused/light-only everywhere else).
+// Status hues (STATUS_CHART_COLORS above) are unchanged — hue/chroma don't shift with
+// the canvas — but contrast was re-checked against this dark surface specifically since
+// the light-canvas neutral tokens (ink-500) drop to a graphics-only ~3:1 here:
+//   success-500 5.03:1 · warning-500 7.67:1 · danger-500 3.88:1 · accent-500 8.03:1 ·
+//   ink-400 4.96:1 — all clear the >=3:1 graphics-contrast floor against #16171d.
+export const GRAPH_SURFACE_DARK = '#16171d'      // ink-900
+export const GRAPH_NODE_NEUTRAL_DARK = '#d3d3d7' // ink-200 — company/neutral nodes, 11.98:1
+export const GRAPH_TEXT_DARK = '#b0b0b7'         // ink-300 — node labels, 8.29:1
+export const GRAPH_LINK_DARK = '#e9e9eb'         // ink-100 — "works-at" threads, used at low alpha
