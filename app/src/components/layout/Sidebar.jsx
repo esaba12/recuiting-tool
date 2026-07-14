@@ -15,7 +15,7 @@ export default function Sidebar({ activeTab, onTabChange, counts = {}, loading, 
   return (
     <>
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex flex-col w-60 shrink-0 bg-ink-900 text-ink-50 min-h-screen sticky top-0">
+      <aside className="hidden md:flex flex-col w-60 shrink-0 bg-ink-900 text-ink-50 h-screen sticky top-0 overflow-y-auto">
         <div className="px-5 py-6">
           <h1 className="font-heading text-lg font-semibold text-white">Recruiting OS</h1>
           <p className="text-xs text-ink-400 mt-0.5">Fall 2026</p>
