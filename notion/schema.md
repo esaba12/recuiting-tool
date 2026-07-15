@@ -12,7 +12,7 @@ Quick reference for all 5 databases. Full setup instructions in `plans/phase-1-n
 | Company | Text | |
 | Role | Select | SWE / PM / Recruiter / Alumni / Referral |
 | Email | Email | |
-| LinkedIn | URL | Auto-filled by Exa enrichment |
+| LinkedIn | URL | Auto-filled by Quick Add enrichment (`lib/enrichment.js`) |
 | Source | Select | Coffee chat / Email / Event / Referral / LinkedIn DM |
 | Status | Select | 🟢 Warm / 🟡 Cooling / 🔴 Cold / ✅ Closed / ⭐ Champion |
 | What They've Done For Me | Text | Referral / intro / insider info / mock interview |
@@ -24,7 +24,7 @@ Quick reference for all 5 databases. Full setup instructions in `plans/phase-1-n
 | Referred By | Relation | → Contacts DB (self) — who introduced/referred you to this contact |
 | Referral Status | Select | `Not Asked` / `Asked` / `Confirmed` / `Declined` — whether this contact is giving *you* a referral for a job application. Distinct from `Referred By` (who introduced you to them) and `Role`'s `Referral` option (their relationship type to you). Added by `notion/add-referral-status-field.js`. |
 | Notes | Text | |
-| Exa Enriched | Checkbox | Checked after Exa enrichment runs |
+| Exa Enriched | Checkbox | Set by `QuickAddContactModal.jsx` when a contact was filled from a live web match (`draft.enrichedFromWeb`); `updateContact`'s `exaEnriched` key. Unchecked for Claude-only/typed-only adds. |
 | Follow-Up Draft | Text | Persisted current draft (cold-open or follow-up), written by the outreach drafting subsystem (`lib/drafting.js` + `DraftPanel.jsx`). Added by `notion/add-followup-fields.js`. |
 | Follow-Up Draft Tier | Number | Escalation tier (1/2/3) the persisted `Follow-Up Draft` was generated for — 0/empty for a cold-open draft. Used to know when to regenerate rather than reuse a stale draft. |
 | Follow-Up Draft Kind | Select | `Cold Open` / `Follow-Up` |

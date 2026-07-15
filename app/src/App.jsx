@@ -4,8 +4,10 @@ import { STATUS_COLOR, URGENCY_COLOR, REFERRAL_STATUS_COLOR, daysSince, daysUnti
 import { statusIconFor, URGENCY_ICON } from './lib/icons.js'
 import AppShell from './components/layout/AppShell.jsx'
 import ContactDetailModal from './components/ContactDetailModal.jsx'
+import QuickAddContactModal from './components/QuickAddContactModal.jsx'
 import ContactsTable from './components/ContactsTable.jsx'
 import LogInteractionModal from './components/LogInteractionModal.jsx'
+import KeepInTouchTab from './components/KeepInTouchTab.jsx'
 import NetworkGraphTab from './components/NetworkGraphTab.jsx'
 import OverviewTab from './components/OverviewTab.jsx'
 import PipelineTab from './components/PipelineTab.jsx'
@@ -18,7 +20,7 @@ import ReferralCoverageTab from './components/ReferralCoverageTab.jsx'
 import OutboxTab from './components/OutboxTab.jsx'
 import DiscoverTab from './components/DiscoverTab.jsx'
 import ExploreTab from './components/ExploreTab.jsx'
-import { Table2, LayoutGrid, Share2, Target, Send, UserSearch } from 'lucide-react'
+import { Table2, LayoutGrid, Share2, Target, Send, UserSearch, HeartHandshake } from 'lucide-react'
 
 // ── Network Tab ───────────────────────────────────────────────────────────────
 
@@ -26,6 +28,7 @@ const NETWORK_VIEWS = [
   { key: 'table',    label: 'Table',    icon: Table2 },
   { key: 'cards',    label: 'Cards',    icon: LayoutGrid },
   { key: 'graph',    label: 'Graph',    icon: Share2 },
+  { key: 'keepintouch', label: 'Keep in Touch', icon: HeartHandshake },
   { key: 'coverage', label: 'Coverage', icon: Target },
   { key: 'outbox',   label: 'Outbox',   icon: Send },
   { key: 'discover', label: 'Discover', icon: UserSearch },
@@ -37,6 +40,8 @@ function NetworkTab({ contacts, apps, interactions, onRefresh, initialView = 'ta
   const [view, setView]       = useState(initialView) // 'table' | 'cards' | 'graph'
   const [editing, setEditing] = useState(null)   // contact object | 'new' | null
   const [logOpen, setLogOpen] = useState(false)
+  const [logContact, setLogContact] = useState(null) // prefilled log (from Keep in Touch)
+  const [quickAddOpen, setQuickAddOpen] = useState(false)
 
   const filtered = contacts
     .filter(c => {
@@ -84,7 +89,7 @@ function NetworkTab({ contacts, apps, interactions, onRefresh, initialView = 'ta
             className="px-3 py-1 bg-white border border-ink-200 rounded-full text-xs font-medium text-ink-600 hover:border-accent-300">
             + Log Interaction
           </button>
-          <button onClick={() => setEditing('new')}
+          <button onClick={() => setQuickAddOpen(true)}
             className="px-3 py-1 bg-accent-600 text-white rounded-full text-xs font-medium hover:bg-accent-700">
             + Contact
           </button>
@@ -93,6 +98,9 @@ function NetworkTab({ contacts, apps, interactions, onRefresh, initialView = 'ta
 
       {view === 'discover'
         ? <DiscoverTab contacts={contacts} apps={apps} interactions={interactions} onRefresh={onRefresh} />
+        : view === 'keepintouch'
+        ? <KeepInTouchTab contacts={contacts} interactions={interactions}
+            onEdit={c => setEditing(c)} onLog={c => setLogContact(c)} />
         : view === 'coverage'
         ? <ReferralCoverageTab contacts={contacts} apps={apps} interactions={interactions} onRefresh={onRefresh} />
         : view === 'graph'
@@ -171,6 +179,23 @@ function NetworkTab({ contacts, apps, interactions, onRefresh, initialView = 'ta
           contacts={contacts}
           onClose={() => setLogOpen(false)}
           onSaved={() => { setLogOpen(false); onRefresh() }}
+        />
+      )}
+
+      {logContact && (
+        <LogInteractionModal
+          contacts={contacts}
+          contact={logContact}
+          onClose={() => setLogContact(null)}
+          onSaved={() => { setLogContact(null); onRefresh() }}
+        />
+      )}
+
+      {quickAddOpen && (
+        <QuickAddContactModal
+          contacts={contacts}
+          onClose={() => setQuickAddOpen(false)}
+          onSaved={() => { setQuickAddOpen(false); onRefresh() }}
         />
       )}
     </div>
