@@ -17,6 +17,7 @@ import QuickScheduleModal from './components/QuickScheduleModal.jsx'
 import ReferralCoverageTab from './components/ReferralCoverageTab.jsx'
 import OutboxTab from './components/OutboxTab.jsx'
 import DiscoverTab from './components/DiscoverTab.jsx'
+import ExploreTab from './components/ExploreTab.jsx'
 import { Table2, LayoutGrid, Share2, Target, Send, UserSearch } from 'lucide-react'
 
 // ── Network Tab ───────────────────────────────────────────────────────────────
@@ -237,6 +238,9 @@ export default function App() {
       )}
       {!loading && tab === 'network'  && (
         <NetworkTab contacts={contacts} apps={apps} interactions={interactions} onRefresh={load} initialView={networkInitialView} />
+      )}
+      {!loading && tab === 'explore'  && (
+        <ExploreTab apps={apps} onFindPeople={() => { setNetworkInitialView('discover'); setTab('network') }} />
       )}
       {!loading && tab === 'pipeline' && <PipelineTab apps={apps} onRefresh={load} />}
       {!loading && tab === 'actions'  && <ActionsTab contacts={contacts} apps={apps} interactions={interactions} onRefresh={load} />}

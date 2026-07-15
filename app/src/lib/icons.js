@@ -2,7 +2,7 @@ import {
   Flame, Snowflake, CloudSnow, Star, CheckCircle2,
   AlertTriangle, AlertCircle, Circle,
   Inbox, Send, HelpCircle, X,
-  LayoutDashboard, Users, Kanban, ListChecks, GitFork,
+  LayoutDashboard, Users, Kanban, ListChecks, GitFork, Compass,
   RefreshCw, ExternalLink, Search, MapPin, Calendar, CalendarDays, UserPlus,
 } from 'lucide-react'
 
@@ -36,6 +36,7 @@ export const BUCKET_ICON = {
 export const NAV_ICON = {
   overview: LayoutDashboard,
   network: Users,
+  explore: Compass,
   pipeline: Kanban,
   actions: ListChecks,
   calendar: CalendarDays,

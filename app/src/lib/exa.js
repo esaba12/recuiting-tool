@@ -17,17 +17,17 @@ function buildQuery({ company, roles, profile }) {
   return `${roleStr} at ${company}${signal}`
 }
 
-// Raw Exa /search over the public-web people index. Returns result pages (url/title/
-// text/summary); extraction is a separate step. `type: auto` lets Exa pick neural vs
-// keyword; `category: people` biases toward individual profiles over company pages.
-export async function exaSearch({ query, numResults = 15, includeDomains }) {
+// Raw Exa /search over the public web. Returns result pages (url/title/text/summary);
+// extraction/ranking is a separate step. `type: auto` lets Exa pick neural vs keyword;
+// `category` biases results ('people' → individual profiles, 'company' → company sites).
+export async function exaSearch({ query, numResults = 15, includeDomains, category = 'people' }) {
   const res = await fetch('/exa/search', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       query,
       type: 'auto',
-      category: 'people',
+      category,
       numResults,
       ...(includeDomains ? { includeDomains } : {}),
       contents: { text: { maxCharacters: 1200 }, summary: true },
@@ -36,11 +36,47 @@ export async function exaSearch({ query, numResults = 15, includeDomains }) {
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     throw new Error(res.status === 401 || res.status === 403
-      ? 'Add EXA_API_KEY to your .env to enable people discovery'
+      ? 'Add EXA_API_KEY to your .env to enable Exa search'
       : err.error || err.message || `Exa error ${res.status}`)
   }
   const data = await res.json()
   return data.results || []
+}
+
+// "More like this" — given a company's URL, Exa returns similar company pages (same
+// result shape as exaSearch). Used by the Explore tab's 🔎 More like this button.
+export async function exaFindSimilar({ url, numResults = 8 }) {
+  const res = await fetch('/exa/findSimilar', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      url,
+      numResults,
+      excludeSourceDomain: true,
+      category: 'company',
+      contents: { text: { maxCharacters: 1000 }, summary: true },
+    }),
+  })
+  if (!res.ok) return []
+  const data = await res.json()
+  return (data.results || []).map(companyFromResult)
+}
+
+// Exa company result -> the {name, website, summary} candidate shape companyFinder ranks.
+function companyFromResult(r) {
+  return { name: r.title || '', website: r.url || '', summary: r.summary || r.text || '', source: 'exa' }
+}
+
+// Company search over Exa's public-web company index. Returns raw candidates + a
+// resultHash so the caller can skip re-ranking when the same companies come back
+// (the same token-frugal skip used by discoverPeople).
+export async function companySearch({ query, numResults = 20, priorResultHash = null }) {
+  const results = await exaSearch({ query, numResults, category: 'company' })
+  const resultHash = hashUrls(results.map(r => r.url))
+  if (priorResultHash && resultHash === priorResultHash) {
+    return { candidates: null, resultHash, skipped: true }
+  }
+  return { candidates: results.map(companyFromResult).filter(c => c.name), resultHash, skipped: false }
 }
 
 export const normUrl = u => (u || '').trim().toLowerCase().replace(/\/+$/, '').replace(/[?#].*$/, '')

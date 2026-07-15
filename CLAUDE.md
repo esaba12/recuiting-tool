@@ -21,9 +21,19 @@ A zero-touch recruiting OS for a student's SWE/PM internship search. Calls, emai
 | Google Calendar API | Screenshot/text → calendar event, via OAuth | ✅ Live in dev · 🔄 needs env vars added to Vercel for production |
 | Granola | Call transcription (no bot) | 🔄 Download + connect |
 | LeetNotion extension | LeetCode → Notion auto-sync | 🔄 Pending install |
-| Exa | People discovery (Discover tab) — public-web people search | ✅ Wired via serverless proxy · needs a (free) Exa account key |
+| Exa | People discovery (Discover) + company discovery (Explore) — public-web search | ✅ Wired via serverless proxy · needs a (free) Exa account key |
+| YC directory (yc-oss/api) | Free public company data (Explore tab candidate pool + autocomplete) | ✅ Direct client fetch, no auth |
 
 **Abandoned:** Gumloop (BYOK requires $37/mo Pro plan), Cowork/Claude Desktop scheduled tasks
+
+---
+
+## Claude Code Dev Tooling (set up 2026-07-14, not part of the deployed app)
+
+- **`/graphify`** — AST-only knowledge graph of this repo (no LLM cost; the 22 doc/markdown files are skipped since semantic extraction needs an API key — code-only mode covers `app/`, `scripts/`, `notion/`, etc.). Rebuild with `graphify . --no-viz --code-only`. Output in `graphify-out/` (gitignore this if it isn't already).
+- **GitHub MCP server** (Docker-based, connected globally in `~/.claude`, not repo-specific) — write-shaped tools (push, merge, delete, create branch/PR/issue, etc.) require explicit confirmation before running; GitHub content pulled into context (issue bodies, PR comments) is scanned for prompt-injection patterns first. Guardrails live in `~/.claude/settings.json` (`permissions.ask`) and `~/.claude/hooks/github-mcp-*.js`.
+- **Project subagents** in `.claude/agents/`: `code-reviewer`, `debugger`, `security-auditor`, `react-specialist` (pulled from VoltAgent/awesome-claude-code-subagents, matched to this repo's React/Vite stack). Invoke via the Agent tool by name. Global `gsd-*` agents (e.g. `gsd-code-reviewer`) cover similar ground but are more deeply tied to the `.planning/` GSD workflow — these are the simpler, framework-agnostic option.
+- **claude-context** (semantic code search MCP) was evaluated and deliberately skipped for now — needs an embedding provider + Milvus vector DB, judged not worth the infra overhead at this repo's size. Revisit if the codebase grows substantially or cross-repo search becomes useful.
 
 ---
 
@@ -114,9 +124,10 @@ Architecture note: unlike `api/notion.js`/`api/claude-api.js` (static bearer tok
 
 **Dev server:** `cd app && npm run dev` → http://localhost:3001
 
-### Tabs (5 top-level, down from 8 — see Networking Tracker below)
+### Tabs (6 top-level — see Networking Tracker below)
 - **Overview** — Notion contacts needing follow-up, application stats, amber "N jobs need review" nudge, staggered KPI-card reveal on mount
 - **Network** — Contact CRM from Contacts DB. Five view modes via a segmented control: **Table** (`ContactsTable.jsx`, `@tanstack/react-table`, default), **Cards**, **Graph** (`NetworkGraphTab.jsx`, `react-force-graph-2d` — force-directed graph of contacts colored by Status + companies derived from the Company field, "Referred By" edges), **Coverage** (`ReferralCoverageTab.jsx` — target-company gaps), and **Discover** (`DiscoverTab.jsx` — people discovery; see its own section below). Add/edit contacts via `ContactDetailModal.jsx` (Status, Urgency, Referred By, Follow-Up Date, plus a "+ Log" affordance that opens `LogInteractionModal.jsx` pre-filled with that contact). Top-level "+ Log Interaction" button opens the same modal unfilled. Every contact shows an expandable interaction History panel from the Interactions DB.
+- **Explore** — Company finder (`ExploreTab.jsx`): onboarding → interest-ranked companies → add to targets (see its own section below)
 - **Pipeline** — Application tracker from Applications DB, stage funnel, `DuplicatesPanel` (see below)
 - **Actions** — Overdue follow-ups, stale applications, high-urgency contacts
 - **Job Boards** — GitHub job board parser (paste repo URL → parse README tables), auto-import, triage buckets, calendar/stats views
@@ -139,6 +150,18 @@ A **view inside the Network tab** (segmented control, next to Coverage — not a
 **Ranking (`lib/discovery.js` `discoveryScore()`):** a **pre-contact** scorer (affinity.js can't rank strangers: no interaction history → everyone buckets cold/0). Scores résumé-signal overlap (user-weighted: past employer > program > university > hometown), reachability × relevance (reachable ICs/recruiters up, VPs down), and **"next best person"** coverage (first contact at a gap company, or a *different-role* person where you already know someone — name-dedup sinks people already in Contacts). The Recommended list breaks score ties toward applied-to companies.
 
 **UI (`components/DiscoverTab.jsx`):** collapsible **background-signals profile** editor (`rec_affinity_profile`, seeded with UMich), the **✨ Recommended** ranked list (across all companies) as default, plus a **By company** view with a per-company "Find people" manual override. Discovered people are a **staging queue** (`rec_discovered`) — nothing hits Notion until **+ Add to Contacts** (dedups via `searchContactByName`, then `addContact` + `updateContact` writing `linkedin`/`Notable Affinity`/`Is UMich Alum`, status Cold). **✎ Draft intro** reuses `lib/drafting.js`'s `draftMessage` (`kind:"cold_open"`, personalization seeded from matched signals). Dismissed/added candidates persist so refreshes don't resurface them. localStorage keys: `rec_discovered`, `rec_discovered_dismissed`, `rec_discovered_added`, `rec_discovery_meta`, `rec_discovery_settings`, `rec_affinity_profile`.
+
+### Explore — company finder (top-level tab; shipped July 2026)
+Top of the funnel: learns Ethan's interests via onboarding, recommends companies he'd like, and — one click — adds them to `rec_target_companies`, so **Coverage** shows the gap and **Discover** finds people there. Funnel: *interests → companies → target list → people*.
+
+**Onboarding (`components/CompanyOnboarding.jsx`):** research-backed ~6 skippable questions stored in `rec_company_prefs`. The anchor is example-based seeding — "companies you already love" (YC autocomplete) — since revealed ≫ stated preference. Prefills from the Job Boards `rec_prefs` (`prefsFromRecPrefs`). Fields: seed companies, domains (≤3), SWE↔PM lean, stage, top-2 priorities, location + work style, free-text extras.
+
+**Data + ranking:**
+- **`lib/ycDirectory.js`** — free public YC directory (`yc-oss.github.io/api`, no auth, CORS-open, direct browser fetch, in-memory session cache). `/companies/top.json` powers seed-company autocomplete + a structured candidate pool filtered by domain (`DOMAIN_TAGSETS`) and stage (team-size bands). Degrades gracefully offline (Exa still covers).
+- **`lib/exa.js`** — `exaSearch` generalized with a `category` param; `companySearch` (category `company`, same URL-hash **skip** token-saver as people) + `exaFindSimilar` (powers 🔎 More like this).
+- **`lib/companyFinder.js`** — `buildCompanyQuery(prefs)` (descriptive neural query); `mergeCandidates` (YC + Exa, dedup by `normalizeCompanyName`, exclude companies already in targets/Applications); one Claude Haiku **ranking call** (mirrors `generateJobAnalysis`) that returns `[{name,website,oneLiner,whyFit,fitScore,domain,stage,badges}]` and deliberately **re-injects the signals students under-weight** (mentorship, return-offer reputation, domain interest) rather than the prestige/pay they over-weight.
+
+**UI (`components/ExploreTab.jsx`):** onboarding gate → ranked **company cards** (fit score, why-you, domain/stage/badges, website). **❤ Add to targets** writes `rec_target_companies` (dedup) → then the button becomes **Find people →** (deep-links to Network → Discover via `onFindPeople`). **🔎 More like this** (`findSimilar`), **✕ Dismiss** (persisted). **Hands-off** like Discover: daily `lastCheck` gate + URL-hash skip (zero Claude tokens when unchanged) + manual ↻ Refresh; nudge "N companies match you." A lazy, best-effort **GitHub eng-signal badge** (`GhBadge`) resolves a company's org from its domain and shows a public-repo count **only when it can confirm the org belongs to the company** (blog/name match) — hidden when unsure, to avoid asserting wrong data. localStorage keys: `rec_company_prefs`, `rec_company_results`, `rec_company_meta`, `rec_company_added`, `rec_company_dismissed`.
 
 ### Job Boards Tab (most-developed feature)
 - Input: GitHub repo URL (e.g., `github.com/speedyapply/2027-SWE-College-Jobs`) or username
