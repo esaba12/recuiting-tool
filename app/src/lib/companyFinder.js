@@ -105,7 +105,10 @@ Return the best ${Math.min(15, candidates.length)}, best first:
   ]
 }`
 
-  const parsed = await claudeJSON({ model: CLAUDE_MODELS.HAIKU, content, maxTokens: 1800 })
+  // ~15 rich objects need well over 1800 tokens; too low a cap truncates the JSON array
+  // mid-element. parseJSONLoose salvages a truncation, but a comfortable cap avoids losing
+  // the tail companies in the first place.
+  const parsed = await claudeJSON({ model: CLAUDE_MODELS.HAIKU, content, maxTokens: 3000 })
   return (parsed.companies || []).filter(c => c?.name)
 }
 
