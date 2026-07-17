@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { BUCKET_CONFIG, BUCKET_ACTIVE, generateJobAnalysis, jobAgeDays, isGhostJob } from './helpers.js'
 
-export default function JobDetailModal({ job, status, onStatusChange, onClose, prefs }) {
+export default function JobDetailModal({ job, status, blurb, onStatusChange, onClose, prefs }) {
   const [analysis, setAnalysis]       = useState(null)
   const [aiLoading, setAiLoading]     = useState(false)
   const [aiError, setAiError]         = useState(null)
@@ -25,7 +25,9 @@ export default function JobDetailModal({ job, status, onStatusChange, onClose, p
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <h2 className="text-base font-bold text-ink-900 truncate">{job.company}</h2>
+              {blurb?.companyAbout && <p className="text-xs text-ink-400 mt-0.5">{blurb.companyAbout}</p>}
               {job.role && <p className="text-sm text-ink-500 mt-0.5 line-clamp-2">{job.role}</p>}
+              {blurb?.roleSummary && <p className="text-xs text-ink-400 mt-0.5">{blurb.roleSummary}</p>}
             </div>
             <button onClick={onClose} className="shrink-0 w-7 h-7 rounded-full bg-ink-100 hover:bg-ink-200 flex items-center justify-center text-ink-500 text-sm">✕</button>
           </div>

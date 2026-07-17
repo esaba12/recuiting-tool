@@ -105,6 +105,51 @@ export function isGhostJob(job) {
   return age !== null && age >= GHOST_JOB_THRESHOLD_DAYS
 }
 
+// Objective (non-personalized) blurb — separate from generateJobAnalysis's per-user Fit
+// Analysis. Cached by jobId in localStorage (see useJobBlurbs.js) since the description of
+// "what Stripe does" doesn't change per viewer, so it's fetched once ever, not once per prefs
+// change, and the cache is shared across different source repos that list the same company/role.
+export async function generateJobBlurb(job) {
+  return claudeJSON({
+    model: CLAUDE_MODELS.HAIKU,
+    maxTokens: 150,
+    content: `Give a brief, factual description for this internship listing — no fluff, no marketing language.
+
+Company: ${job.company}
+Role: ${job.role || 'Internship'}
+${job.location ? `Location: ${job.location}` : ''}
+
+Reply with JSON only — no explanation, no markdown:
+{
+  "companyAbout": "1 sentence: what this company does",
+  "roleSummary": "1 sentence: what this specific role/internship likely involves, based on the title"
+}`,
+  })
+}
+
+// Deterministic preference-match score — no AI call, mirrors lib/discovery.js's
+// discoveryScore approach of scoring signal overlap instead of needing interaction history.
+// 0 when no preferences are set (so sorting is a no-op until the user fills in Preferences).
+export function relevanceScore(job, prefs) {
+  if (!prefs || Object.keys(prefs).filter(k => prefs[k]).length === 0) return 0
+
+  const role = (job.role || '').toLowerCase()
+  const location = (job.location || '').toLowerCase()
+  const haystack = `${role} ${location} ${(job.notes || '').toLowerCase()}`
+  const terms = str => (str || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+
+  let score = 0
+  terms(prefs.targetRoles).forEach(t => { if (role.includes(t)) score += 3 })
+  terms(prefs.preferredLocations).forEach(t => {
+    if (t === 'remote' ? /remote/.test(location) : location.includes(t)) score += 2
+  })
+  terms(prefs.interests).forEach(t => { if (haystack.includes(t)) score += 2 })
+  terms(prefs.companyType).forEach(t => { if (haystack.includes(t)) score += 1 })
+  terms(prefs.dealBreakers).forEach(t => { if (haystack.includes(t)) score -= 5 })
+
+  return score
+}
+
 export async function generateJobAnalysis(job, prefs) {
   const prefText = [
     prefs.targetRoles        && `Target roles: ${prefs.targetRoles}`,

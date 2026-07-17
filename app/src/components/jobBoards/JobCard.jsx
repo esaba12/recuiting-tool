@@ -1,7 +1,7 @@
 import { BUCKET_CONFIG, BUCKET_TAG, jobAgeDays, isGhostJob } from './helpers.js'
 import { BUCKET_ICON, LOCATION_ICON } from '../../lib/icons.js'
 
-export default function JobCard({ job, status, onStatusChange, onClick }) {
+export default function JobCard({ job, status, blurb, onStatusChange, onClick }) {
   const initials = job.company.replace(/[^a-zA-Z ]/g, '').trim().slice(0, 2).toUpperCase() || '??'
   const isClosed = job.status === 'closed'
   const ageDays = jobAgeDays(job)
@@ -37,7 +37,9 @@ export default function JobCard({ job, status, onStatusChange, onClick }) {
               {status === 'applying' ? '♥' : '♡'}
             </button>
           </div>
+          {blurb?.companyAbout && <p className="text-[11px] text-ink-400 mt-0.5 line-clamp-1 leading-tight">{blurb.companyAbout}</p>}
           {job.role && <p className="text-xs text-ink-500 mt-0.5 line-clamp-2 leading-tight">{job.role}</p>}
+          {blurb?.roleSummary && <p className="text-xs text-ink-400 mt-0.5 line-clamp-2 leading-tight">{blurb.roleSummary}</p>}
           <div className="flex items-center gap-2 mt-2 flex-wrap">
             {job.location && (
               <span className="text-xs text-ink-400 truncate max-w-[140px] inline-flex items-center gap-0.5">

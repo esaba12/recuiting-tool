@@ -43,7 +43,10 @@ export async function claudeJSON({ model, content, maxTokens }) {
 export function parseJSONLoose(text) {
   const start = text.indexOf('{')
   if (start === -1) throw new Error('Could not parse Claude response as JSON')
-  const body = text.slice(start)
+  // Despite "no markdown" in every prompt, Haiku sometimes wraps the JSON in a ```
+  // fence anyway. A trailing fence isn't a truncation (closeTruncatedJSON below only
+  // repairs missing closing brackets), so strip it before attempting a parse.
+  const body = text.slice(start).replace(/\s*```\s*$/, '')
 
   try { return JSON.parse(body) } catch { /* fall through to salvage */ }
 

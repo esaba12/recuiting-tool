@@ -1,12 +1,13 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { addApplication, updateApplicationTriage } from '../../notion.js'
 import { EmptyState } from '../../shared.jsx'
-import { BUCKET_CONFIG, BUCKET_ACTIVE, BUCKET_TO_TRIAGE, TRIAGE_TO_BUCKET, lsGet, lsSet, jobId, parseJobDate, isGhostJob } from './helpers.js'
+import { BUCKET_CONFIG, BUCKET_ACTIVE, BUCKET_TO_TRIAGE, TRIAGE_TO_BUCKET, lsGet, lsSet, jobId, parseJobDate, isGhostJob, relevanceScore } from './helpers.js'
 import PreferencesPanel from './PreferencesPanel.jsx'
 import JobCard from './JobCard.jsx'
 import CalendarView from './CalendarView.jsx'
 import JobDetailModal from './JobDetailModal.jsx'
 import RepoStats from './RepoStats.jsx'
+import useJobBlurbs from './useJobBlurbs.js'
 
 export default function RepoJobsView({ data, apps, onImported, onClear }) {
   const prefsKey   = 'rec_prefs'
@@ -115,12 +116,22 @@ export default function RepoJobsView({ data, apps, onImported, onClear }) {
     }
     return true
   })
-  // Ghost/stale listings sink to the bottom rather than being removed outright — a false
-  // positive during a time-pressured season shouldn't hide a real posting, only deprioritize it.
-  // Array.prototype.sort is stable, so within each group the original order is preserved.
-  const sorted = hideStale ? filtered : filtered.slice().sort((a, b) => (isGhostJob(a) ? 1 : 0) - (isGhostJob(b) ? 1 : 0))
+  // In Needs Review, rank by relevance to the saved preferences first (0 for everyone when
+  // no preferences are set, so this is a no-op until Preferences is filled in). Ghost/stale
+  // listings still sink to the bottom rather than being removed outright — a false positive
+  // during a time-pressured season shouldn't hide a real posting, only deprioritize it.
+  // Array.prototype.sort is stable, so ties fall back to original order.
+  const sorted = filtered.slice().sort((a, b) => {
+    if (bucket === 'review') {
+      const rel = relevanceScore(b, prefs) - relevanceScore(a, prefs)
+      if (rel !== 0) return rel
+    }
+    if (hideStale) return 0
+    return (isGhostJob(a) ? 1 : 0) - (isGhostJob(b) ? 1 : 0)
+  })
 
   const paginated = sorted.slice(0, page * PER_PAGE)
+  const blurbs = useJobBlurbs(paginated)
 
   return (
     <div className="space-y-4">
@@ -242,6 +253,7 @@ export default function RepoJobsView({ data, apps, onImported, onClear }) {
             {paginated.map((job, i) => (
               <JobCard key={`${job.company}-${i}`} job={job}
                 status={statusFor(job)}
+                blurb={blurbs[jobId(job)]}
                 onStatusChange={s => updateStatus(job, s)}
                 onClick={() => setSelectedJob(job)} />
             ))}
@@ -259,6 +271,7 @@ export default function RepoJobsView({ data, apps, onImported, onClear }) {
         <JobDetailModal
           job={selectedJob}
           status={statusFor(selectedJob)}
+          blurb={blurbs[jobId(selectedJob)]}
           onStatusChange={s => { updateStatus(selectedJob, s) }}
           onClose={() => setSelectedJob(null)}
           prefs={prefs}
