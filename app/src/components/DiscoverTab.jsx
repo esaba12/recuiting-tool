@@ -35,7 +35,7 @@ function personalizationSeed(person, reasons) {
   return signal.join('; ') || `They're ${person.title || 'on the team'} at ${person.company}`
 }
 
-export default function DiscoverTab({ contacts, apps, interactions, onRefresh }) {
+export default function DiscoverTab({ contacts, apps, interactions, onRefresh, focus }) {
   const [profile, setProfile]     = useState(() => ({ ...DEFAULT_PROFILE, ...(lsGet(PROFILE_KEY) || {}), weights: { ...DEFAULT_WEIGHTS, ...(lsGet(PROFILE_KEY)?.weights || {}) } }))
   const [editingProfile, setEditingProfile] = useState(false)
   const [targets]                 = useState(() => lsGet(TARGETS_KEY) || [])
@@ -52,6 +52,7 @@ export default function DiscoverTab({ contacts, apps, interactions, onRefresh })
   const [progress, setProgress]   = useState(null) // { done, total } during a background run
   const [newCount, setNewCount]   = useState(null) // people found on the last run
   const ranRef = useRef(false)     // guard the once-per-mount background kick
+  const rowRefs = useRef(new Map()) // company key → row DOM node, for the Coverage deep-link scroll
 
   function persistDiscovered(next) { setDiscovered(next); lsSet(DISCOVERED_KEY, next) }
   function persistMeta(next) { setMeta(next); lsSet(META_KEY, next) }
@@ -152,6 +153,20 @@ export default function DiscoverTab({ contacts, apps, interactions, onRefresh })
       setLoadingCompany(null)
     }
   }
+
+  // Deep-link from Coverage's "🔍 Find people" button — jump to By company, run a ranked
+  // search for that one company if it hasn't been searched yet, and scroll its row into
+  // view. `ts` (not just company) is in the dep array so re-clicking the same company from
+  // Coverage re-triggers this even though the string itself didn't change.
+  useEffect(() => {
+    if (!focus) return
+    setView('byCompany')
+    const key = normalizeCompanyName(focus.company)
+    if (!discovered[key]) findPeople(focus.company)
+    const el = rowRefs.current.get(key)
+    if (el) setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus?.ts])
 
   // Applied-to company keys — used to nudge prospects at companies you're pursuing up the list.
   const appliedKeys = useMemo(
@@ -257,7 +272,8 @@ export default function DiscoverTab({ contacts, apps, interactions, onRefresh })
               {rows.map(r => {
                 const live = (r.ranked || []).filter(isLive)
                 return (
-                  <div key={r.company} className={`bg-white rounded-xl p-4 shadow-sm border ${r.status === 'gap' ? 'border-danger-200' : r.status === 'weak' ? 'border-warning-200' : 'border-ink-100'}`}>
+                  <div key={r.company} ref={el => { if (el) rowRefs.current.set(normalizeCompanyName(r.company), el) }}
+                    className={`bg-white rounded-xl p-4 shadow-sm border transition-shadow ${focus && normalizeCompanyName(focus.company) === normalizeCompanyName(r.company) ? 'ring-2 ring-accent-300' : ''} ${r.status === 'gap' ? 'border-danger-200' : r.status === 'weak' ? 'border-warning-200' : 'border-ink-100'}`}>
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold text-ink-900">{r.company}</span>

@@ -17,7 +17,7 @@ const TARGETS_KEY = 'rec_target_companies'
 // just "any contact at all" — a company where your only contact is a total stranger you
 // added but never talked to isn't meaningfully covered.
 const STRONG_COVERAGE_THRESHOLD = 3
-export default function ReferralCoverageTab({ contacts, apps, interactions, onRefresh }) {
+export default function ReferralCoverageTab({ contacts, apps, interactions, onRefresh, onFindPeople }) {
   const [targets, setTargets] = useState(() => lsGet(TARGETS_KEY) || [])
   const [editingList, setEditingList] = useState(() => (lsGet(TARGETS_KEY) || []).length === 0)
   const [draft, setDraft] = useState(() => (lsGet(TARGETS_KEY) || []).join('\n'))
@@ -82,7 +82,7 @@ export default function ReferralCoverageTab({ contacts, apps, interactions, onRe
           <div className="space-y-2">
             {rows.map(r => (
               <div key={r.company}
-                className={`bg-white rounded-xl p-4 shadow-sm border flex items-center justify-between gap-3 ${r.status === 'gap' ? 'border-danger-200' : r.status === 'weak' ? 'border-warning-200' : 'border-ink-100'}`}>
+                className={`bg-white rounded-xl p-4 shadow-sm border flex items-start justify-between gap-3 ${r.status === 'gap' ? 'border-danger-200' : r.status === 'weak' ? 'border-warning-200' : 'border-ink-100'}`}>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold text-ink-900">{r.company}</span>
@@ -102,17 +102,23 @@ export default function ReferralCoverageTab({ contacts, apps, interactions, onRe
                     <DraftPanel contact={r.matchedContacts[0]} kind="cold_open" />
                   )}
                 </div>
-                {r.status === 'gap' ? (
-                  <button onClick={() => setAddingFor(r.company)}
-                    className="shrink-0 px-3 py-1.5 bg-white border border-ink-200 rounded-full text-xs font-medium text-ink-600 hover:border-accent-300">
-                    + Add contact
+                <div className="shrink-0 flex flex-col items-end gap-1.5">
+                  <button onClick={() => onFindPeople(r.company)}
+                    className="px-3 py-1.5 bg-accent-600 text-white rounded-full text-xs font-medium hover:bg-accent-700">
+                    🔍 Find people
                   </button>
-                ) : (
-                  <button onClick={() => setDraftingCompany(c => c === r.company ? null : r.company)}
-                    className="shrink-0 px-3 py-1.5 bg-white border border-ink-200 rounded-full text-xs font-medium text-ink-600 hover:border-accent-300">
-                    {draftingCompany === r.company ? 'Hide' : '✎ Draft outreach'}
-                  </button>
-                )}
+                  {r.status === 'gap' ? (
+                    <button onClick={() => setAddingFor(r.company)}
+                      className="px-3 py-1.5 bg-white border border-ink-200 rounded-full text-xs font-medium text-ink-600 hover:border-accent-300">
+                      + Add contact
+                    </button>
+                  ) : (
+                    <button onClick={() => setDraftingCompany(c => c === r.company ? null : r.company)}
+                      className="px-3 py-1.5 bg-white border border-ink-200 rounded-full text-xs font-medium text-ink-600 hover:border-accent-300">
+                      {draftingCompany === r.company ? 'Hide' : '✎ Draft outreach'}
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>

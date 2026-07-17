@@ -8,6 +8,8 @@ import QuickAddContactModal from './components/QuickAddContactModal.jsx'
 import ContactsTable from './components/ContactsTable.jsx'
 import LogInteractionModal from './components/LogInteractionModal.jsx'
 import KeepInTouchTab from './components/KeepInTouchTab.jsx'
+import MetButton from './components/MetButton.jsx'
+import { logMetWithContact } from './lib/quickLog.js'
 import NetworkGraphTab from './components/NetworkGraphTab.jsx'
 import OverviewTab from './components/OverviewTab.jsx'
 import PipelineTab from './components/PipelineTab.jsx'
@@ -34,7 +36,7 @@ const NETWORK_VIEWS = [
   { key: 'discover', label: 'Discover', icon: UserSearch },
 ]
 
-function NetworkTab({ contacts, apps, interactions, onRefresh, initialView = 'table' }) {
+function NetworkTab({ contacts, apps, interactions, onRefresh, initialView = 'table', initialFocusCompany = null }) {
   const [filter, setFilter]   = useState('ALL')
   const [search, setSearch]   = useState('')
   const [view, setView]       = useState(initialView) // 'table' | 'cards' | 'graph'
@@ -42,6 +44,7 @@ function NetworkTab({ contacts, apps, interactions, onRefresh, initialView = 'ta
   const [logOpen, setLogOpen] = useState(false)
   const [logContact, setLogContact] = useState(null) // prefilled log (from Keep in Touch)
   const [quickAddOpen, setQuickAddOpen] = useState(false)
+  const [focusCompany, setFocusCompany] = useState(initialFocusCompany) // { company, ts } — deep-link into Discover's ranked search for one company
 
   const filtered = contacts
     .filter(c => {
@@ -60,6 +63,11 @@ function NetworkTab({ contacts, apps, interactions, onRefresh, initialView = 'ta
     })
 
   const statuses = ['ALL', '🟢 Warm', '🟡 Cooling', '🔴 Cold', '⭐ Champion', '✅ Closed']
+
+  async function handleMet(contact) {
+    await logMetWithContact(contact)
+    onRefresh()
+  }
 
   return (
     <div>
@@ -97,12 +105,13 @@ function NetworkTab({ contacts, apps, interactions, onRefresh, initialView = 'ta
       </div>
 
       {view === 'discover'
-        ? <DiscoverTab contacts={contacts} apps={apps} interactions={interactions} onRefresh={onRefresh} />
+        ? <DiscoverTab contacts={contacts} apps={apps} interactions={interactions} onRefresh={onRefresh} focus={focusCompany} />
         : view === 'keepintouch'
         ? <KeepInTouchTab contacts={contacts} interactions={interactions}
-            onEdit={c => setEditing(c)} onLog={c => setLogContact(c)} />
+            onEdit={c => setEditing(c)} onLog={c => setLogContact(c)} onMet={handleMet} />
         : view === 'coverage'
-        ? <ReferralCoverageTab contacts={contacts} apps={apps} interactions={interactions} onRefresh={onRefresh} />
+        ? <ReferralCoverageTab contacts={contacts} apps={apps} interactions={interactions} onRefresh={onRefresh}
+            onFindPeople={company => { setFocusCompany({ company, ts: Date.now() }); setView('discover') }} />
         : view === 'graph'
         ? <NetworkGraphTab contacts={contacts} />
         : view === 'outbox'
@@ -110,7 +119,7 @@ function NetworkTab({ contacts, apps, interactions, onRefresh, initialView = 'ta
         : filtered.length === 0
         ? <EmptyState msg={contacts.length === 0 ? 'No contacts yet — the email pipeline will add them as recruiting emails come in.' : 'No contacts match this filter.'} />
         : view === 'table'
-        ? <ContactsTable contacts={filtered} onEdit={c => setEditing(c)} />
+        ? <ContactsTable contacts={filtered} onEdit={c => setEditing(c)} onMet={handleMet} />
         : (
           <div className="space-y-2">
             {filtered.map(c => {
@@ -156,6 +165,7 @@ function NetworkTab({ contacts, apps, interactions, onRefresh, initialView = 'ta
                             : `Due ${fmt(c.followUpDate)}`}
                         </p>
                       )}
+                      <MetButton contact={c} onMet={handleMet} className="mt-1" />
                     </div>
                   </div>
                 </div>
@@ -207,6 +217,7 @@ function NetworkTab({ contacts, apps, interactions, onRefresh, initialView = 'ta
 export default function App() {
   const [tab, setTab]           = useState('overview')
   const [networkInitialView, setNetworkInitialView] = useState('table')
+  const [networkFocusCompany, setNetworkFocusCompany] = useState(null)
   const [contacts, setContacts] = useState([])
   const [apps, setApps]         = useState([])
   const [interactions, setInteractions] = useState([])
@@ -262,10 +273,13 @@ export default function App() {
           onOpenActions={() => setTab('actions')} />
       )}
       {!loading && tab === 'network'  && (
-        <NetworkTab contacts={contacts} apps={apps} interactions={interactions} onRefresh={load} initialView={networkInitialView} />
+        <NetworkTab contacts={contacts} apps={apps} interactions={interactions} onRefresh={load}
+          initialView={networkInitialView} initialFocusCompany={networkFocusCompany} />
       )}
       {!loading && tab === 'explore'  && (
-        <ExploreTab apps={apps} onFindPeople={() => { setNetworkInitialView('discover'); setTab('network') }} />
+        <ExploreTab apps={apps} onFindPeople={company => {
+          setNetworkFocusCompany({ company, ts: Date.now() }); setNetworkInitialView('discover'); setTab('network')
+        }} />
       )}
       {!loading && tab === 'pipeline' && <PipelineTab apps={apps} onRefresh={load} />}
       {!loading && tab === 'actions'  && <ActionsTab contacts={contacts} apps={apps} interactions={interactions} onRefresh={load} />}

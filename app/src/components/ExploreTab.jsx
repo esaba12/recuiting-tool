@@ -155,14 +155,22 @@ export default function ExploreTab({ apps = [], onFindPeople }) {
 }
 
 // ── Company card ─────────────────────────────────────────────────────────────────
+function withProtocol(url) { return url.startsWith('http') ? url : `https://${url}` }
+
 function CompanyCard({ company: c, index, isAdded, onAdd, onDismiss, onExpand, expanding, onFindPeople }) {
   const scoreColor = c.fitScore >= 8 ? 'bg-success-100 text-success-800' : c.fitScore >= 5 ? 'bg-accent-100 text-accent-700' : 'bg-ink-100 text-ink-600'
+  const openSite = () => { if (c.website) window.open(withProtocol(c.website), '_blank', 'noopener,noreferrer') }
+  const stop = (fn) => (e) => { e.stopPropagation(); fn?.(e) }
   return (
-    <div className="bg-white rounded-xl p-4 shadow-sm border border-ink-100">
+    <div onClick={c.website ? openSite : undefined}
+      className={`bg-white rounded-xl p-4 shadow-sm border border-ink-100 transition-colors ${c.website ? 'cursor-pointer hover:border-accent-300 hover:shadow-md' : ''}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-semibold text-ink-900">{c.name}</span>
+            {c.website
+              ? <a href={withProtocol(c.website)} target="_blank" rel="noreferrer" onClick={stop()}
+                  className="font-semibold text-ink-900 hover:text-accent-600 hover:underline">{c.name}</a>
+              : <span className="font-semibold text-ink-900">{c.name}</span>}
             {Number.isFinite(c.fitScore) && <Badge label={`fit ${c.fitScore}/10`} color={scoreColor} />}
             {isAdded && <Badge label="✓ In targets" color="bg-success-100 text-success-800" />}
           </div>
@@ -172,13 +180,13 @@ function CompanyCard({ company: c, index, isAdded, onAdd, onDismiss, onExpand, e
             {c.domain && <Badge label={c.domain} color="bg-indigo-50 text-indigo-600" />}
             {c.stage && <Badge label={c.stage} color="bg-ink-100 text-ink-600" />}
             {(c.badges || []).slice(0, 3).map((b, k) => <Badge key={k} label={b} color="bg-accent-50 text-accent-700" />)}
-            {index < 6 && <GhBadge website={c.website} name={c.name} />}
-            {c.website && <a href={c.website} target="_blank" rel="noreferrer" className="text-[11px] text-accent-500 hover:underline">Site ↗</a>}
+            {index < 6 && <span onClick={stop()}><GhBadge website={c.website} name={c.name} /></span>}
+            {c.website && <a href={withProtocol(c.website)} target="_blank" rel="noreferrer" onClick={stop()} className="text-[11px] text-accent-500 hover:underline">Site ↗</a>}
           </div>
         </div>
-        <div className="shrink-0 flex flex-col items-end gap-1.5">
+        <div className="shrink-0 flex flex-col items-end gap-1.5" onClick={stop()}>
           {isAdded
-            ? <button onClick={onFindPeople} className="px-2.5 py-1 bg-accent-600 text-white rounded-full text-xs font-medium hover:bg-accent-700">Find people →</button>
+            ? <button onClick={() => onFindPeople(c.name)} className="px-2.5 py-1 bg-accent-600 text-white rounded-full text-xs font-medium hover:bg-accent-700">Find people →</button>
             : <button onClick={onAdd} className="px-2.5 py-1 bg-accent-600 text-white rounded-full text-xs font-medium hover:bg-accent-700">❤ Add to targets</button>}
           <div className="flex gap-1.5">
             <button onClick={onExpand} disabled={expanding || !c.website}
