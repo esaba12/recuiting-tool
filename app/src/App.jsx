@@ -8,8 +8,6 @@ import QuickAddContactModal from './components/QuickAddContactModal.jsx'
 import ContactsTable from './components/ContactsTable.jsx'
 import LogInteractionModal from './components/LogInteractionModal.jsx'
 import KeepInTouchTab from './components/KeepInTouchTab.jsx'
-import MetButton from './components/MetButton.jsx'
-import { logMetWithContact } from './lib/quickLog.js'
 import NetworkGraphTab from './components/NetworkGraphTab.jsx'
 import OverviewTab from './components/OverviewTab.jsx'
 import PipelineTab from './components/PipelineTab.jsx'
@@ -64,11 +62,6 @@ function NetworkTab({ contacts, apps, interactions, onRefresh, initialView = 'ta
 
   const statuses = ['ALL', '🟢 Warm', '🟡 Cooling', '🔴 Cold', '⭐ Champion', '✅ Closed']
 
-  async function handleMet(contact) {
-    await logMetWithContact(contact)
-    onRefresh()
-  }
-
   return (
     <div>
       <div className="flex gap-2 mb-4 flex-wrap items-center">
@@ -108,7 +101,7 @@ function NetworkTab({ contacts, apps, interactions, onRefresh, initialView = 'ta
         ? <DiscoverTab contacts={contacts} apps={apps} interactions={interactions} onRefresh={onRefresh} focus={focusCompany} />
         : view === 'keepintouch'
         ? <KeepInTouchTab contacts={contacts} interactions={interactions}
-            onEdit={c => setEditing(c)} onLog={c => setLogContact(c)} onMet={handleMet} />
+            onEdit={c => setEditing(c)} onLog={c => setLogContact(c)} />
         : view === 'coverage'
         ? <ReferralCoverageTab contacts={contacts} apps={apps} interactions={interactions} onRefresh={onRefresh}
             onFindPeople={company => { setFocusCompany({ company, ts: Date.now() }); setView('discover') }} />
@@ -119,7 +112,7 @@ function NetworkTab({ contacts, apps, interactions, onRefresh, initialView = 'ta
         : filtered.length === 0
         ? <EmptyState msg={contacts.length === 0 ? 'No contacts yet — the email pipeline will add them as recruiting emails come in.' : 'No contacts match this filter.'} />
         : view === 'table'
-        ? <ContactsTable contacts={filtered} onEdit={c => setEditing(c)} onMet={handleMet} />
+        ? <ContactsTable contacts={filtered} onEdit={c => setEditing(c)} />
         : (
           <div className="space-y-2">
             {filtered.map(c => {
@@ -165,7 +158,6 @@ function NetworkTab({ contacts, apps, interactions, onRefresh, initialView = 'ta
                             : `Due ${fmt(c.followUpDate)}`}
                         </p>
                       )}
-                      <MetButton contact={c} onMet={handleMet} className="mt-1" />
                     </div>
                   </div>
                 </div>
