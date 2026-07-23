@@ -31,8 +31,8 @@ export default function Sidebar({ activeTab, onTabChange, counts = {}, loading, 
               <button
                 key={item.id}
                 onClick={() => onTabChange(item.id)}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors
-                  ${active ? 'bg-accent-500 text-white' : 'text-ink-300 hover:bg-ink-800 hover:text-white'}`}
+                className={`hex-cut w-full flex items-center gap-2.5 px-3.5 py-2 border text-sm font-medium transition-colors
+                  ${active ? 'bg-accent-500 border-accent-400 text-white' : 'border-ink-800 text-ink-300 hover:bg-ink-800 hover:border-ink-700 hover:text-white'}`}
               >
                 {Icon && <Icon size={16} strokeWidth={2} />}
                 <span className="flex-1 text-left">{item.label}</span>
@@ -46,17 +46,17 @@ export default function Sidebar({ activeTab, onTabChange, counts = {}, loading, 
 
         <div className="px-3 py-4 border-t border-ink-800 space-y-2">
           <button onClick={onAddSchedule}
-            className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-accent-500 text-white hover:bg-accent-600 transition-colors">
+            className="hex-cut w-full flex items-center justify-center gap-1.5 px-3 py-2 border border-accent-400 text-xs font-medium bg-accent-500 text-white hover:bg-accent-600 transition-colors">
             <SCHEDULE_ICON size={13} />
             + Schedule
           </button>
           <button onClick={onAddEvent}
-            className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-ink-800 text-ink-100 hover:bg-ink-700 transition-colors">
+            className="hex-cut w-full flex items-center justify-center gap-1.5 px-3 py-2 border border-ink-700 text-xs font-medium bg-ink-800 text-ink-100 hover:bg-ink-700 transition-colors">
             <CALENDAR_ICON size={13} />
             + Event
           </button>
           <button onClick={onRefresh} disabled={loading}
-            className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-ink-800 text-ink-100 hover:bg-ink-700 disabled:opacity-50 transition-colors">
+            className="hex-cut w-full flex items-center justify-center gap-1.5 px-3 py-2 border border-ink-700 text-xs font-medium bg-ink-800 text-ink-100 hover:bg-ink-700 disabled:opacity-50 transition-colors">
             <REFRESH_ICON size={13} className={loading ? 'animate-spin' : ''} />
             {loading ? 'Loading...' : 'Refresh'}
           </button>
@@ -73,7 +73,8 @@ export default function Sidebar({ activeTab, onTabChange, counts = {}, loading, 
           const active = activeTab === item.id
           return (
             <button key={item.id} onClick={() => onTabChange(item.id)}
-              className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg text-[10px] font-medium ${active ? 'text-accent-400' : 'text-ink-400'}`}>
+              className={`hex-cut-sm flex flex-col items-center gap-0.5 px-2.5 py-1 border text-[10px] font-medium transition-colors
+                ${active ? 'bg-ink-800 border-accent-500 text-accent-400' : 'border-transparent text-ink-400'}`}>
               {Icon && <Icon size={18} strokeWidth={2} />}
               {item.label}
             </button>
