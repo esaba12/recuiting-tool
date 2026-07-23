@@ -74,15 +74,34 @@ function processRecruitingEmails() {
       const body     = msg.getPlainBody().slice(0, 4000)
       const date     = Utilities.formatDate(msg.getDate(), 'UTC', 'yyyy-MM-dd')
 
+      // Deterministic meeting signals, extracted before the Claude call so they can be fed
+      // in as hints — an attached .ics or a Zoom/Meet/Teams link is more reliable evidence
+      // of a real scheduled meeting than asking Claude to spot a date in free text.
+      const invite      = extractCalendarInvite(msg)
+      const meetingLink = (invite && invite.meetingLink) || extractMeetingLink(body)
+
       console.log(`→ "${subject}" from ${from} (${messages.length - seen} new message(s))`)
 
-      const data = extractWithClaude(keys.anthropic, subject, from, body, date)
+      const data = extractWithClaude(keys.anthropic, subject, from, body, date, invite, meetingLink)
 
       if (!data || data.type === 'UNRELATED') {
         console.log('  Skipped — UNRELATED')
         thread.addLabel(doneLabel)
         props.setProperty(seenKey, String(messages.length))
         return
+      }
+
+      // Claude's own meeting_link guess (from prompt JSON) is only a fallback for cases the
+      // regex above missed — the deterministic sources win when present.
+      data.meeting_link = meetingLink || data.meeting_link || null
+
+      if (invite) {
+        // An attached calendar invite is ground truth for timing — overrides Claude's
+        // text-guessed date/format rather than merely supplementing it.
+        data.interview_date = Utilities.formatDate(invite.start, 'UTC', 'yyyy-MM-dd')
+        data.interview_time = invite
+        if (!['INTERVIEW_INVITE', 'OFFER'].includes(data.type)) data.type = 'INTERVIEW_INVITE'
+        if (!data.interview_format) data.interview_format = data.meeting_link ? 'video' : data.interview_format
       }
 
       // Header-derived address is authoritative — Claude never guesses contact_email from
@@ -92,7 +111,7 @@ function processRecruitingEmails() {
       data.contact_email = counterpart.email || null
       if (!data.contact_name && counterpart.displayName) data.contact_name = counterpart.displayName
 
-      console.log(`  Type: ${data.type} | ${data.contact_name} @ ${data.company}`)
+      console.log(`  Type: ${data.type} | ${data.contact_name} @ ${data.company}${data.meeting_link ? ` | ${data.meeting_link}` : ''}`)
 
       const contactId = upsertContact(keys.notion, data)
 
@@ -109,7 +128,8 @@ function processRecruitingEmails() {
       // Simplifying assumption: the whole thread maps to the one contact resolved above,
       // even if a second person is CC'd on some messages.
       for (let i = seen; i < messages.length; i++) {
-        logMessageInteraction(keys.notion, messages[i], contactId, threadId, myEmail)
+        const isNewest = i === messages.length - 1
+        logMessageInteraction(keys.notion, messages[i], contactId, threadId, myEmail, isNewest ? data.meeting_link : null)
       }
 
       // A thread discovered via the Sent-folder search (not already labeled) gets the
@@ -133,7 +153,15 @@ function processRecruitingEmails() {
 // CLAUDE — classify + extract in one Haiku call
 // ─────────────────────────────────────────────────────────────────────────────
 
-function extractWithClaude(apiKey, subject, from, body, date) {
+function extractWithClaude(apiKey, subject, from, body, date, invite, meetingLink) {
+  // Deterministic signals (calendar invite attachment, Zoom/Meet/Teams link) are handed to
+  // Claude as hints rather than left for it to re-derive from free text — see
+  // extractCalendarInvite()/extractMeetingLink() and their callers in processRecruitingEmails().
+  const inviteHint = invite
+    ? `\n\nThis email has a calendar invite attached: "${invite.summary || subject}", scheduled for ${Utilities.formatDate(invite.start, 'UTC', 'yyyy-MM-dd HH:mm')} UTC${invite.location ? ` at/via ${invite.location}` : ''}. Treat this as strong evidence of a real scheduled interview/meeting.`
+    : ''
+  const linkHint = meetingLink ? `\n\nA video meeting link was found in this email: ${meetingLink}` : ''
+
   const prompt = `You are processing recruiting emails for a CS student targeting SWE internships.
 
 Analyze this email. Return ONLY valid JSON — no explanation, no markdown.
@@ -151,8 +179,9 @@ Otherwise return:
   "next_action": "one concrete action the candidate should take",
   "follow_up_draft": "3-sentence reply the candidate could send, or null",
   "interview_date": "YYYY-MM-DD if an interview is scheduled, or null",
-  "interview_format": "phone|video|onsite|null"
-}
+  "interview_format": "phone|video|onsite|null",
+  "meeting_link": "the Zoom/Google Meet/Teams/etc. video call URL if one is mentioned in the body, else null"
+}${inviteHint}${linkHint}
 
 Subject: ${subject}
 From: ${from}
@@ -281,12 +310,15 @@ function upsertContact(notionKey, data) {
   }
 }
 
-function logMessageInteraction(notionKey, message, contactId, threadId, myEmail) {
+function logMessageInteraction(notionKey, message, contactId, threadId, myEmail, meetingLink) {
   const from      = parseAddress(message.getFrom())
   const direction = (from && from.email === myEmail) ? 'Outbound' : 'Inbound'
   const date      = Utilities.formatDate(message.getDate(), 'UTC', 'yyyy-MM-dd')
   const title     = `Email — ${direction} — ${date}`
   const plainBody = message.getPlainBody()
+  // Surface the meeting link at the top of the summary (only passed for the newest message,
+  // the one that was actually classified) so it's visible at a glance in the Interactions row.
+  const summary   = meetingLink ? `📅 Meeting link: ${meetingLink}\n\n${plainBody}` : plainBody
 
   notionReq(notionKey, 'post', '/pages', {
     parent:     { database_id: INTERACTIONS_DB },
@@ -297,7 +329,7 @@ function logMessageInteraction(notionKey, message, contactId, threadId, myEmail)
       'Type':        { select: { name: 'Email' } },
       'Direction':   { select: { name: direction } },
       'Channel Ref': { rich_text: [{ text: { content: threadId } }] },
-      'Summary':     { rich_text: [{ text: { content: plainBody.slice(0, 300) } }] },
+      'Summary':     { rich_text: [{ text: { content: summary.slice(0, 300) } }] },
       'Body':        { rich_text: [{ text: { content: plainBody.slice(0, 2000) } }] },
     },
   })
@@ -348,19 +380,104 @@ function upsertApplication(notionKey, data) {
 
 function createCalendarEvent(data) {
   if (!data.interview_date) return
-  const [y, m, d] = data.interview_date.split('-').map(Number)
-  const start = new Date(y, m - 1, d, 14, 0)
-  const end   = new Date(y, m - 1, d, 15, 0)
+
+  // A parsed calendar-invite attachment gives an exact start/end — prefer it over the
+  // 2–3pm placeholder window, which is only a fallback for text-only date mentions with no
+  // attached invite (see extractCalendarInvite()).
+  let start, end
+  if (data.interview_time && data.interview_time.start) {
+    start = data.interview_time.start
+    end   = data.interview_time.end || new Date(start.getTime() + 60 * 60000)
+  } else {
+    const [y, m, d] = data.interview_date.split('-').map(Number)
+    start = new Date(y, m - 1, d, 14, 0)
+    end   = new Date(y, m - 1, d, 15, 0)
+  }
+
   const title = `Interview — ${data.company}${data.role ? ` · ${data.role}` : ''}`
   const desc  = [
     data.summary,
     `Format: ${data.interview_format || 'TBD'}`,
+    data.meeting_link ? `Meeting link: ${data.meeting_link}` : '',
     `Next action: ${data.next_action || '—'}`,
     data.follow_up_draft ? `\nDraft reply:\n${data.follow_up_draft}` : '',
   ].filter(Boolean).join('\n')
 
-  CalendarApp.getDefaultCalendar().createEvent(title, start, end, { description: desc })
+  const opts = { description: desc }
+  if (data.meeting_link) opts.location = data.meeting_link
+
+  CalendarApp.getDefaultCalendar().createEvent(title, start, end, opts)
   console.log(`  Calendar event: ${title} on ${data.interview_date}`)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MEETING SIGNALS — calendar invites (.ics attachments) and video-call links, detected
+// deterministically rather than relying on Claude to spot a date/link in free text. An
+// attached invite in particular is authoritative: it has an exact start/end time, unlike a
+// date guessed from prose ("let's meet next Tuesday").
+// ─────────────────────────────────────────────────────────────────────────────
+
+const MEETING_LINK_RE = /https?:\/\/[^\s<>"')\]]*(?:zoom\.us\/j\/|meet\.google\.com\/|teams\.microsoft\.com\/l\/meetup-join|teams\.live\.com\/meet|webex\.com\/(?:meet|join))[^\s<>"')\]]*/i
+
+function extractMeetingLink(text) {
+  if (!text) return null
+  const m = text.match(MEETING_LINK_RE)
+  return m ? m[0].replace(/[.,)\]]+$/, '') : null
+}
+
+// RFC 5545 line-folding: a line that's too long continues on the next physical line, which
+// starts with a space or tab. Unfold before parsing so a folded DTSTART/DESCRIPTION doesn't
+// silently truncate at the fold point.
+function unfoldIcs(text) {
+  return text.replace(/\r\n/g, '\n').replace(/\n[ \t]/g, '')
+}
+
+function icsField(text, name) {
+  // Matches "NAME:value" and "NAME;PARAM=x:value" (e.g. DTSTART;TZID=America/New_York:...)
+  const m = text.match(new RegExp(`^${name}(?:;[^:\\n]*)?:(.*)$`, 'im'))
+  return m ? m[1].trim() : null
+}
+
+// Handles both UTC form (DTSTART:20260815T140000Z) and local/floating form
+// (DTSTART:20260815T140000 or DTSTART;TZID=...:20260815T140000). TZID-qualified values are
+// treated as local time — good enough here since events this script creates already land on
+// the script owner's default calendar timezone.
+function parseIcsDate(value) {
+  if (!value) return null
+  const m = value.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z)?$/)
+  if (!m) return null
+  const [, y, mo, d, h, mi, s, isUtc] = m
+  return isUtc
+    ? new Date(Date.UTC(+y, +mo - 1, +d, +h, +mi, +s))
+    : new Date(+y, +mo - 1, +d, +h, +mi, +s)
+}
+
+function extractCalendarInvite(message) {
+  let attachments
+  try {
+    attachments = message.getAttachments({ includeInlineImages: false })
+  } catch (e) {
+    return null
+  }
+  const ics = attachments.find(a =>
+    /\.ics$/i.test(a.getName() || '') || (a.getContentType() || '').indexOf('text/calendar') !== -1)
+  if (!ics) return null
+
+  try {
+    const text        = unfoldIcs(ics.getDataAsString())
+    const start        = parseIcsDate(icsField(text, 'DTSTART'))
+    if (!start) return null
+    const end           = parseIcsDate(icsField(text, 'DTEND'))
+    const summary       = icsField(text, 'SUMMARY')
+    const location       = icsField(text, 'LOCATION')
+    const description    = (icsField(text, 'DESCRIPTION') || '').replace(/\\n/g, '\n')
+    const meetingLink    = extractMeetingLink(location) || extractMeetingLink(description)
+
+    return { start, end, summary, location, meetingLink }
+  } catch (e) {
+    console.error(`  ICS parse failed: ${e.message}`)
+    return null
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

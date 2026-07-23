@@ -1,6 +1,7 @@
 // Shared client for the /claude-api proxy (see api/claude-api.js + vite.config.js).
 // Extracted from 3 near-identical hand-rolled fetch calls that previously lived in
 // LogInteractionModal.jsx, jobBoards/helpers.js, and AddToCalendarModal.jsx.
+import { authHeader } from './supabaseClient.js'
 
 export const CLAUDE_MODELS = {
   HAIKU: 'claude-haiku-4-5-20251001',
@@ -12,13 +13,13 @@ export const CLAUDE_MODELS = {
 async function callClaude({ model, content, maxTokens = 1000 }) {
   const res = await fetch('/claude-api/v1/messages', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
     body: JSON.stringify({ model, max_tokens: maxTokens, messages: [{ role: 'user', content }] }),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     throw new Error(res.status === 401 || res.status === 403
-      ? 'Add ANTHROPIC_API_KEY to your .env to enable AI features'
+      ? (err.error?.message || 'Add your Anthropic API key in Settings to enable AI features')
       : err.error?.message || `API error ${res.status}`)
   }
   const data = await res.json()

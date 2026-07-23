@@ -1,5 +1,7 @@
 import { useState } from 'react'
-import { addContact, updateContact, archiveContact } from '../notion.js'
+import { Handshake } from 'lucide-react'
+import { addContact, updateContact, archiveContact } from '../db.js'
+import { logMetWithContact } from '../lib/quickLog.js'
 import { ROLE_OPTIONS, SOURCE_OPTIONS, STATUS_OPTIONS, URGENCY_OPTIONS, AFFINITY_OPTIONS, REFERRAL_STATUS_OPTIONS, TYPE_COLOR, Badge, fmt } from '../shared.jsx'
 import LogInteractionModal from './LogInteractionModal.jsx'
 import DraftPanel from './DraftPanel.jsx'
@@ -31,6 +33,7 @@ export default function ContactDetailModal({ contact, contacts, interactions, on
   const [error, setError]   = useState(null)
   const [logOpen, setLogOpen] = useState(false)
   const [draftOpen, setDraftOpen] = useState(false)
+  const [metLogging, setMetLogging] = useState(false)
 
   const set = (key, val) => setForm(f => ({ ...f, [key]: val }))
 
@@ -76,6 +79,19 @@ export default function ContactDetailModal({ contact, contacts, interactions, on
     } catch (e) {
       setError(e.message)
       setSaving(false)
+    }
+  }
+
+  // Quick-log "met with them" — records a Meeting interaction + bumps Last Interaction/
+  // Follow-Up Date without going through the notes-taking LogInteractionModal flow.
+  async function met() {
+    setMetLogging(true); setError(null)
+    try {
+      await logMetWithContact(contact)
+      onSaved()
+    } catch (e) {
+      setError(e.message)
+      setMetLogging(false)
     }
   }
 
@@ -212,10 +228,17 @@ export default function ContactDetailModal({ contact, contacts, interactions, on
           {!isNew && (
             <div className="pt-3 border-t border-ink-100 flex items-center justify-between">
               <p className="text-xs font-semibold text-ink-400 uppercase tracking-wide">History ({history.length})</p>
-              <button onClick={() => setLogOpen(true)}
-                className="px-2.5 py-1 bg-white border border-ink-200 rounded-full text-xs font-medium text-ink-600 hover:border-accent-300">
-                + Log
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button onClick={met} disabled={metLogging}
+                  title="Quick-log that you met with them and set a follow-up reminder — no notes required"
+                  className="inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-ink-200 rounded-full text-xs font-medium text-ink-600 hover:border-accent-300 disabled:opacity-50">
+                  <Handshake size={12} /> {metLogging ? 'Logging…' : 'Met'}
+                </button>
+                <button onClick={() => setLogOpen(true)}
+                  className="px-2.5 py-1 bg-white border border-ink-200 rounded-full text-xs font-medium text-ink-600 hover:border-accent-300">
+                  + Log
+                </button>
+              </div>
             </div>
           )}
 

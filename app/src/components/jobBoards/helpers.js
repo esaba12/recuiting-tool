@@ -1,4 +1,5 @@
-import { claudeJSON, CLAUDE_MODELS } from '../../lib/claude.js'
+import { aiJSON, AI_MODELS } from '../../lib/ai.js'
+export { lsGet, lsSet } from '../../lib/scopedStorage.js'
 
 export const LEVEL_COLOR = ['#ebedf0', '#9be9a8', '#40c463', '#30a14e', '#216e39']
 export const LANG_COLOR  = ['bg-blue-500','bg-purple-500','bg-yellow-500','bg-green-500','bg-red-500','bg-orange-500']
@@ -58,9 +59,6 @@ export const TRIAGE_TO_BUCKET = { 'Needs Review': 'review', 'Applying': 'applyin
 
 export const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
-export function lsGet(key) { try { return JSON.parse(localStorage.getItem(key)) || null } catch { return null } }
-export function lsSet(key, val) { localStorage.setItem(key, JSON.stringify(val)) }
-
 export function jobId(job) {
   return `${job.company}::${job.role}`.replace(/[^\w:]/g, '_').slice(0, 80)
 }
@@ -105,13 +103,50 @@ export function isGhostJob(job) {
   return age !== null && age >= GHOST_JOB_THRESHOLD_DAYS
 }
 
+// ── Deadline urgency (real close-dates, where GPT+Exa found one) ────────────────────
+
+export function daysUntilDeadline(deadlineInfo) {
+  if (!deadlineInfo?.deadline) return null
+  const d = new Date(deadlineInfo.deadline + 'T23:59:59')
+  return Math.ceil((d.getTime() - Date.now()) / 86400000)
+}
+
+// 'urgent' (<=3d), 'soon' (<=10d), 'known' (further out but confirmed), 'rolling'
+// (explicitly stated as rolling/continuous), or 'unknown' (never checked, or checked
+// and the page didn't say either way — treated the same in the UI: no promise made).
+export function urgencyTier(deadlineInfo) {
+  const days = daysUntilDeadline(deadlineInfo)
+  if (days !== null) {
+    if (days <= 3) return 'urgent'
+    if (days <= 10) return 'soon'
+    return 'known'
+  }
+  if (deadlineInfo?.rolling) return 'rolling'
+  return 'unknown'
+}
+
+// Top-level sort priority: jobs with a confirmed real deadline sort soonest-first —
+// closest deadlines first, as literally requested. Returns 0 (defer to the caller's
+// next tiebreaker — relevance, then freshness/ghost-sink) when NEITHER job has a known
+// deadline, since there's nothing deadline-wise to compare yet.
+export function urgencyComparator(deadlinesByKey) {
+  return (a, b) => {
+    const da = daysUntilDeadline(deadlinesByKey?.[jobId(a)])
+    const db = daysUntilDeadline(deadlinesByKey?.[jobId(b)])
+    if (da !== null && db !== null) return da - db
+    if (da !== null) return -1
+    if (db !== null) return 1
+    return 0
+  }
+}
+
 // Objective (non-personalized) blurb — separate from generateJobAnalysis's per-user Fit
 // Analysis. Cached by jobId in localStorage (see useJobBlurbs.js) since the description of
 // "what Stripe does" doesn't change per viewer, so it's fetched once ever, not once per prefs
 // change, and the cache is shared across different source repos that list the same company/role.
 export async function generateJobBlurb(job) {
-  return claudeJSON({
-    model: CLAUDE_MODELS.HAIKU,
+  return aiJSON({
+    model: AI_MODELS.MINI,
     maxTokens: 150,
     content: `Give a brief, factual description for this internship listing — no fluff, no marketing language.
 
@@ -150,7 +185,7 @@ export function relevanceScore(job, prefs) {
   return score
 }
 
-export async function generateJobAnalysis(job, prefs) {
+export async function generateJobAnalysis(job, prefs, model = AI_MODELS.MINI) {
   const prefText = [
     prefs.targetRoles        && `Target roles: ${prefs.targetRoles}`,
     prefs.preferredLocations && `Preferred locations: ${prefs.preferredLocations}`,
@@ -159,8 +194,8 @@ export async function generateJobAnalysis(job, prefs) {
     prefs.companyType        && `Company type: ${prefs.companyType}`,
   ].filter(Boolean).join('\n') || 'No specific preferences set'
 
-  return claudeJSON({
-    model: CLAUDE_MODELS.HAIKU,
+  return aiJSON({
+    model,
     maxTokens: 450,
     content: `You are a recruiting advisor. A CS student targeting SWE internships is evaluating:
 

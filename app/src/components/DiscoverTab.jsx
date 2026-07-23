@@ -5,7 +5,8 @@ import { discoverPeople, normUrl } from '../lib/exa.js'
 import { dueCompanies, coverageStatus, todayStr } from '../lib/discoveryScheduler.js'
 import { rankCandidates, DEFAULT_PROFILE, DEFAULT_WEIGHTS, roleCategory, affinityTagsFor } from '../lib/discovery.js'
 import { draftMessage } from '../lib/drafting.js'
-import { addContact, updateContact, searchContactByName } from '../notion.js'
+import { addContact, updateContact, searchContactByName } from '../db.js'
+import { useAuth } from '../lib/AuthContext.jsx'
 import { Badge, EmptyState } from '../shared.jsx'
 
 const PROFILE_KEY    = 'rec_affinity_profile'
@@ -36,7 +37,11 @@ function personalizationSeed(person, reasons) {
 }
 
 export default function DiscoverTab({ contacts, apps, interactions, onRefresh, focus }) {
-  const [profile, setProfile]     = useState(() => ({ ...DEFAULT_PROFILE, ...(lsGet(PROFILE_KEY) || {}), weights: { ...DEFAULT_WEIGHTS, ...(lsGet(PROFILE_KEY)?.weights || {}) } }))
+  const { profile: userProfile } = useAuth()
+  // First-run seed: use the account's Settings profile (school/grad year) rather
+  // than a hardcoded default, so a fresh signup's affinity scoring reflects THEM.
+  const seed = { ...DEFAULT_PROFILE, university: userProfile?.school || '', gradYear: userProfile?.grad_year || '' }
+  const [profile, setProfile]     = useState(() => ({ ...seed, ...(lsGet(PROFILE_KEY) || {}), weights: { ...DEFAULT_WEIGHTS, ...(lsGet(PROFILE_KEY)?.weights || {}) } }))
   const [editingProfile, setEditingProfile] = useState(false)
   const [targets]                 = useState(() => lsGet(TARGETS_KEY) || [])
   const [discovered, setDiscovered] = useState(() => lsGet(DISCOVERED_KEY) || {})

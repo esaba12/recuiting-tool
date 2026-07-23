@@ -1,7 +1,22 @@
-import { BUCKET_CONFIG, BUCKET_TAG, jobAgeDays, isGhostJob } from './helpers.js'
+import { BUCKET_CONFIG, BUCKET_TAG, jobAgeDays, isGhostJob, daysUntilDeadline, urgencyTier } from './helpers.js'
 import { BUCKET_ICON, LOCATION_ICON } from '../../lib/icons.js'
 
-export default function JobCard({ job, status, blurb, onStatusChange, onClick }) {
+const DEADLINE_BADGE = {
+  urgent: 'bg-danger-500 text-white',
+  soon:   'bg-warning-400 text-white',
+  known:  'bg-ink-100 text-ink-600',
+}
+
+function DeadlineBadge({ deadline }) {
+  const tier = urgencyTier(deadline)
+  if (tier === 'unknown') return null
+  if (tier === 'rolling') return <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-ink-50 text-ink-400">Rolling — no deadline</span>
+  const days = daysUntilDeadline(deadline)
+  const label = days < 0 ? 'Closed' : days === 0 ? 'Closes today' : `Closes in ${days}d`
+  return <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${DEADLINE_BADGE[tier]}`}>⏰ {label}</span>
+}
+
+export default function JobCard({ job, status, blurb, deadline, onStatusChange, onClick }) {
   const initials = job.company.replace(/[^a-zA-Z ]/g, '').trim().slice(0, 2).toUpperCase() || '??'
   const isClosed = job.status === 'closed'
   const ageDays = jobAgeDays(job)
@@ -47,6 +62,7 @@ export default function JobCard({ job, status, blurb, onStatusChange, onClick })
               </span>
             )}
             {job.dateAdded && <span className="text-xs text-ink-400">{job.dateAdded}</span>}
+            {!isClosed && <DeadlineBadge deadline={deadline} />}
             {!isClosed && stale && (
               <span title={`No update detected in ${ageDays} days — may be a ghost listing`}
                 className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-warning-100 text-warning-800">

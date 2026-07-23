@@ -9,12 +9,15 @@
 
 export const DEFAULT_WEIGHTS = { pastEmployer: 4, program: 3, university: 2, hometown: 1 }
 
-// Seeded with what we already know (UMich); the user fills the rest via the Discover
-// tab's profile panel. Weights default to the user's stated priority order:
-// past employers > programs/clubs > university > hometown.
+// Blank by default — DiscoverTab seeds university/gradYear from the signed-in
+// user's Settings profile (school/grad_year) on first run, so every account
+// gets its own affinity signal instead of one hardcoded school. The user
+// fills in the rest via the Discover tab's profile panel. Weights default to
+// the user's stated priority order: past employers > programs/clubs >
+// university > hometown.
 export const DEFAULT_PROFILE = {
-  university: 'University of Michigan',
-  gradYear: 2028,
+  university: '',
+  gradYear: '',
   pastEmployers: [],
   programs: [],
   hometown: '',

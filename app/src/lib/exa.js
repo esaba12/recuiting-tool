@@ -1,11 +1,12 @@
-import { claudeJSON, CLAUDE_MODELS } from './claude.js'
+import { aiJSON, AI_MODELS } from './ai.js'
+import { authHeader } from './supabaseClient.js'
 
 // People discovery via Exa (see api/exa.js + vite.config.js). Exa searches its own index
 // of the PUBLIC web — company pages, personal sites, public profile pages as crawled
 // openly — the same legal posture as any search engine. It never logs into or scrapes
 // LinkedIn directly; LinkedIn URLs it surfaces are treated as reference links only.
 //
-// Two steps: (1) Exa /search finds candidate people-pages, (2) one Claude call structures
+// Two steps: (1) Exa /search finds candidate people-pages, (2) one AI call structures
 // them into a clean people array. Ranking is intentionally NOT done here — that's
 // lib/discovery.js, so the search layer stays a pure "who's out there" fetch.
 
@@ -23,7 +24,7 @@ function buildQuery({ company, roles, profile }) {
 export async function exaSearch({ query, numResults = 15, includeDomains, category = 'people' }) {
   const res = await fetch('/exa/search', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
     body: JSON.stringify({
       query,
       type: 'auto',
@@ -36,7 +37,7 @@ export async function exaSearch({ query, numResults = 15, includeDomains, catego
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     throw new Error(res.status === 401 || res.status === 403
-      ? 'Add EXA_API_KEY to your .env to enable Exa search'
+      ? (err.error?.message || 'Add your Exa API key in Settings to enable Exa search')
       : err.error || err.message || `Exa error ${res.status}`)
   }
   const data = await res.json()
@@ -48,7 +49,7 @@ export async function exaSearch({ query, numResults = 15, includeDomains, catego
 export async function exaFindSimilar({ url, numResults = 8 }) {
   const res = await fetch('/exa/findSimilar', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
     body: JSON.stringify({
       url,
       numResults,
@@ -138,6 +139,6 @@ ${digest}
   ]
 }`
 
-  const parsed = await claudeJSON({ model: CLAUDE_MODELS.HAIKU, content, maxTokens: 1500 })
+  const parsed = await aiJSON({ model: AI_MODELS.MINI, content, maxTokens: 1500 })
   return { people: (parsed.people || []).filter(p => p?.name), resultHash, skippedExtraction: false }
 }

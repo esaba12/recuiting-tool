@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { searchContactByName, addContact, updateContact } from '../notion.js'
+import { searchContactByName, addContact, updateContact } from '../db.js'
 import Modal from './ui/Modal.jsx'
 import Button from './ui/Button.jsx'
 

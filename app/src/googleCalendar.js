@@ -1,8 +1,10 @@
+import { authHeader } from './lib/supabaseClient.js'
+
 async function gcalFetch(path, { method = 'GET', body, query } = {}) {
   const qs = query ? `?${new URLSearchParams(query)}` : ''
   const res = await fetch(`/google-calendar/calendar/v3/calendars/primary/${path}${qs}`, {
     method,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
     body: body ? JSON.stringify(body) : undefined,
   })
   if (!res.ok) {

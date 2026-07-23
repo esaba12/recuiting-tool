@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { addApplication, updateApplication } from '../notion.js'
+import { addApplication, updateApplication } from '../db.js'
 import { STAGE_COLOR, STAGE_ORDER, TERMINAL_STAGES, Badge, fmt, daysBetween } from '../shared.jsx'
 import { BUCKET_CONFIG, BUCKET_ACTIVE, BUCKET_TO_TRIAGE, TRIAGE_TO_BUCKET, generateJobAnalysis, lsGet } from './jobBoards/helpers.js'
+import { AI_PROVIDER_LABEL } from '../lib/ai.js'
 
 export default function ApplicationDetailModal({ app, onStatusChange, onClose, onDelete, onSaved }) {
   const isNew = !app
@@ -220,7 +221,7 @@ export default function ApplicationDetailModal({ app, onStatusChange, onClose, o
             {aiLoading && (
               <div className="flex items-center gap-2 text-xs text-ink-400">
                 <div className="w-3 h-3 border-2 border-accent-400 border-t-transparent rounded-full animate-spin" />
-                Analyzing with Claude Haiku...
+                Analyzing with {AI_PROVIDER_LABEL}...
               </div>
             )}
 
@@ -287,7 +288,7 @@ export default function ApplicationDetailModal({ app, onStatusChange, onClose, o
 
             {!analysis && !aiLoading && !aiError && (
               <p className="text-xs text-ink-400">
-                Claude Haiku (~$0.0001) reads your preferences and gives personalized pros/cons.
+                {AI_PROVIDER_LABEL} reads your preferences and gives personalized pros/cons.
                 {Object.keys(prefs).filter(k => prefs[k]).length === 0 &&
                   ' Set your preferences in Job Boards for a more targeted analysis.'}
               </p>

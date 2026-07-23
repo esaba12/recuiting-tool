@@ -1,4 +1,4 @@
-import { claudeJSON, CLAUDE_MODELS } from './claude.js'
+import { aiJSON, AI_MODELS } from './ai.js'
 
 // Escalation tier for an overdue follow-up, derived from days-overdue rather than a
 // stored counter (no client-side scheduler exists — App.jsx only fetches on mount/
@@ -64,5 +64,5 @@ Rules:
 
 export async function draftMessage({ contact, kind, tier, personalizationContext }) {
   const content = buildDraftPrompt({ contact, kind, tier, personalizationContext })
-  return claudeJSON({ model: CLAUDE_MODELS.HAIKU, content, maxTokens: 400 })
+  return aiJSON({ model: AI_MODELS.MINI, content, maxTokens: 400 })
 }

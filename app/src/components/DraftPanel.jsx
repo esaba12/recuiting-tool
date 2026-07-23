@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { draftMessage, escalationTier } from '../lib/drafting.js'
-import { updateContact } from '../notion.js'
+import { updateContact } from '../db.js'
 
 const KIND_LABEL = { cold_open: 'Cold Open', follow_up: 'Follow-Up' }
 

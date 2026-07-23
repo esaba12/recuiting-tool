@@ -16,4 +16,8 @@ app/.verify-*
 
 node_modules/
 .worktrees/
+.claude/worktrees/
 .vercel
+
+# graphify knowledge-graph output — regenerate with `graphify . --no-viz --code-only`
+graphify-out/

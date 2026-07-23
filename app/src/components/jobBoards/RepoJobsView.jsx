@@ -1,13 +1,17 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { addApplication, updateApplicationTriage } from '../../notion.js'
+import { addApplication, updateApplicationTriage } from '../../db.js'
 import { EmptyState } from '../../shared.jsx'
-import { BUCKET_CONFIG, BUCKET_ACTIVE, BUCKET_TO_TRIAGE, TRIAGE_TO_BUCKET, lsGet, lsSet, jobId, parseJobDate, isGhostJob, relevanceScore } from './helpers.js'
+import {
+  BUCKET_CONFIG, BUCKET_ACTIVE, BUCKET_TO_TRIAGE, TRIAGE_TO_BUCKET, lsGet, lsSet, jobId,
+  parseJobDate, isGhostJob, jobAgeDays, relevanceScore, urgencyComparator, urgencyTier, daysUntilDeadline,
+} from './helpers.js'
 import PreferencesPanel from './PreferencesPanel.jsx'
 import JobCard from './JobCard.jsx'
 import CalendarView from './CalendarView.jsx'
 import JobDetailModal from './JobDetailModal.jsx'
 import RepoStats from './RepoStats.jsx'
 import useJobBlurbs from './useJobBlurbs.js'
+import useJobDeadlines from './useJobDeadlines.js'
 
 export default function RepoJobsView({ data, apps, onImported, onClear }) {
   const prefsKey   = 'rec_prefs'
@@ -23,7 +27,9 @@ export default function RepoJobsView({ data, apps, onImported, onClear }) {
   const [page, setPage]         = useState(1)
   const [optimistic, setOptimistic] = useState({}) // jobKey -> bucket key, overlays Notion state until it refreshes
   const [importState, setImportState] = useState(null) // { done, total } | null
+  const [urgentOnly, setUrgentOnly] = useState(false)
   const PER_PAGE = 30
+  const { deadlines, recheck: recheckDeadline } = useJobDeadlines(data.jobs)
 
   // Auto-import: every open (non-closed) listing not already in the Applications DB
   // gets created there with Triage='Needs Review' — hands-off, no per-job clicking.
@@ -47,7 +53,7 @@ export default function RepoJobsView({ data, apps, onImported, onClear }) {
         try {
           await addApplication({
             company: job.company, role: job.role, jdLink: job.applyUrl,
-            location: job.location, sourceRepo: data.repoName, datePosted: job.dateAdded,
+            location: job.location, sourceRepo: job.sourceRepo || data.repoName, datePosted: job.dateAdded,
           })
         } catch { claimedKeysRef.current.delete(jobId(job)) /* allow retry on next visit */ }
         if (!cancelled) setImportState(s => s && ({ ...s, done: s.done + 1 }))
@@ -95,10 +101,18 @@ export default function RepoJobsView({ data, apps, onImported, onClear }) {
     BUCKET_CONFIG.map(b => [b.key, b.key === 'all' ? data.jobs.length :
       data.jobs.filter(j => statusFor(j) === b.key).length])
   )
+  const urgentCount = data.jobs.filter(j => {
+    const tier = urgencyTier(deadlines[jobId(j)])
+    return tier === 'urgent' || tier === 'soon'
+  }).length
 
   const filtered = data.jobs.filter(j => {
     if (bucket !== 'all' && statusFor(j) !== bucket) return false
     if (hideStale && isGhostJob(j)) return false
+    if (urgentOnly) {
+      const tier = urgencyTier(deadlines[jobId(j)])
+      if (tier !== 'urgent' && tier !== 'soon') return false
+    }
     const loc = (j.location || '').toLowerCase()
     if (locFilter && !loc.includes(locFilter.toLowerCase())) return false
     if (search) {
@@ -116,18 +130,29 @@ export default function RepoJobsView({ data, apps, onImported, onClear }) {
     }
     return true
   })
-  // In Needs Review, rank by relevance to the saved preferences first (0 for everyone when
-  // no preferences are set, so this is a no-op until Preferences is filled in). Ghost/stale
-  // listings still sink to the bottom rather than being removed outright — a false positive
-  // during a time-pressured season shouldn't hide a real posting, only deprioritize it.
-  // Array.prototype.sort is stable, so ties fall back to original order.
+  // Sort priority: (1) a confirmed real deadline wins outright — closest deadlines
+  // first, as requested — ahead of everything else. (2) In Needs Review, rank by
+  // relevance to the saved preferences (0 for everyone when no preferences are set, so
+  // this is a no-op until Preferences is filled in). (3) Ghost/stale listings sink to
+  // the bottom of what's left, then freshest-posted-first — the honest fallback proxy
+  // for jobs with no known deadline. Array.prototype.sort is stable, so true ties fall
+  // back to original order.
+  const urgencySort = urgencyComparator(deadlines)
   const sorted = filtered.slice().sort((a, b) => {
+    const urg = urgencySort(a, b)
+    if (urg !== 0) return urg
     if (bucket === 'review') {
       const rel = relevanceScore(b, prefs) - relevanceScore(a, prefs)
       if (rel !== 0) return rel
     }
     if (hideStale) return 0
-    return (isGhostJob(a) ? 1 : 0) - (isGhostJob(b) ? 1 : 0)
+    const ga = isGhostJob(a), gb = isGhostJob(b)
+    if (ga !== gb) return ga ? 1 : -1
+    const aa = jobAgeDays(a), ab = jobAgeDays(b)
+    if (aa !== null && ab !== null) return aa - ab
+    if (aa !== null) return -1
+    if (ab !== null) return 1
+    return 0
   })
 
   const paginated = sorted.slice(0, page * PER_PAGE)
@@ -135,18 +160,41 @@ export default function RepoJobsView({ data, apps, onImported, onClear }) {
 
   return (
     <div className="space-y-4">
-      {/* Repo header */}
+      {/* Header — single repo, or aggregated across every tracked board */}
       <div className="bg-white rounded-xl p-4 shadow-sm border border-ink-100 flex items-center gap-3">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <a href={data.repoUrl} target="_blank" rel="noreferrer"
-              className="font-semibold text-ink-900 hover:text-accent-600 text-sm">{data.repoName}</a>
-            <span className="text-xs text-ink-400">★ {data.stars?.toLocaleString()}</span>
-          </div>
-          {data.description && <p className="text-xs text-ink-500 mt-0.5">{data.description}</p>}
-          <p className="text-xs text-ink-400 mt-1">
-            {data.jobs.length} listings · {bucketCounts.review || 0} need review · {bucketCounts.applying || 0} applying
-          </p>
+          {data.mode === 'boards' ? (
+            <>
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="font-semibold text-ink-900 text-sm">📋 All tracked boards</p>
+                <span className="text-xs text-ink-400">{data.sources?.length || 0} sources</span>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap mt-1">
+                {(data.sources || []).map(s => (
+                  <a key={`${s.owner}/${s.repo}`} href={`https://github.com/${s.owner}/${s.repo}`} target="_blank" rel="noreferrer"
+                    title={s.error || `${s.jobCount} listings`}
+                    className={`text-xs px-2 py-0.5 rounded-full border ${s.error ? 'border-danger-200 text-danger-500 bg-danger-50' : 'border-ink-200 text-ink-500 bg-ink-50 hover:border-accent-300 hover:text-accent-600'}`}>
+                    {s.owner}/{s.repo}{s.error ? ' ⚠' : ` · ${s.jobCount}`}
+                  </a>
+                ))}
+              </div>
+              <p className="text-xs text-ink-400 mt-1.5">
+                {data.jobs.length} unique listings{data.dupeCount > 0 ? ` (${data.dupeCount} cross-posted duplicates merged)` : ''} · {bucketCounts.review || 0} need review · {bucketCounts.applying || 0} applying
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-2 flex-wrap">
+                <a href={data.repoUrl} target="_blank" rel="noreferrer"
+                  className="font-semibold text-ink-900 hover:text-accent-600 text-sm">{data.repoName}</a>
+                <span className="text-xs text-ink-400">★ {data.stars?.toLocaleString()}</span>
+              </div>
+              {data.description && <p className="text-xs text-ink-500 mt-0.5">{data.description}</p>}
+              <p className="text-xs text-ink-400 mt-1">
+                {data.jobs.length} listings · {bucketCounts.review || 0} need review · {bucketCounts.applying || 0} applying
+              </p>
+            </>
+          )}
         </div>
         <button onClick={onClear} className="text-xs text-ink-400 hover:text-ink-600 shrink-0">✕</button>
       </div>
@@ -225,16 +273,24 @@ export default function RepoJobsView({ data, apps, onImported, onClear }) {
               {loc}
             </button>
           ))}
+          <button onClick={() => setUrgentOnly(u => !u)}
+            title="Only listings with a confirmed deadline within 10 days"
+            className={`px-2.5 py-1 rounded-full text-xs border transition-colors ml-auto
+              ${urgentOnly
+                ? 'bg-danger-500 text-white border-danger-500'
+                : 'bg-white text-ink-500 border-ink-200 hover:border-danger-300 hover:text-danger-600'}`}>
+            ⏰ Closing soon {urgentCount > 0 && <span className="opacity-80">({urgentCount})</span>}
+          </button>
           <button onClick={() => setHideStale(h => !h)}
             title="Hide listings with no detected update in 45+ days"
-            className={`px-2.5 py-1 rounded-full text-xs border transition-colors ml-auto
+            className={`px-2.5 py-1 rounded-full text-xs border transition-colors
               ${hideStale
                 ? 'bg-warning-500 text-white border-warning-500'
                 : 'bg-white text-ink-500 border-ink-200 hover:border-warning-300 hover:text-warning-700'}`}>
             👻 Hide stale
           </button>
           <button
-            onClick={() => { setSearch(''); setLocFilter(''); setHideStale(false) }}
+            onClick={() => { setSearch(''); setLocFilter(''); setHideStale(false); setUrgentOnly(false) }}
             className="px-2.5 py-1 rounded-full text-xs border border-ink-200 text-ink-400 hover:text-danger-500 hover:border-danger-200 transition-colors">
             Clear all
           </button>
@@ -254,6 +310,7 @@ export default function RepoJobsView({ data, apps, onImported, onClear }) {
               <JobCard key={`${job.company}-${i}`} job={job}
                 status={statusFor(job)}
                 blurb={blurbs[jobId(job)]}
+                deadline={deadlines[jobId(job)]}
                 onStatusChange={s => updateStatus(job, s)}
                 onClick={() => setSelectedJob(job)} />
             ))}
@@ -272,6 +329,8 @@ export default function RepoJobsView({ data, apps, onImported, onClear }) {
           job={selectedJob}
           status={statusFor(selectedJob)}
           blurb={blurbs[jobId(selectedJob)]}
+          deadline={deadlines[jobId(selectedJob)]}
+          onRecheckDeadline={() => recheckDeadline(selectedJob)}
           onStatusChange={s => { updateStatus(selectedJob, s) }}
           onClose={() => setSelectedJob(null)}
           prefs={prefs}

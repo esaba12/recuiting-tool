@@ -1,8 +1,10 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { lsGet, lsSet, timeAgo } from './jobBoards/helpers.js'
+import { authHeader } from '../lib/supabaseClient.js'
 import { normalizeCompanyName } from '../lib/networkGraph.js'
 import { todayStr } from '../lib/discoveryScheduler.js'
 import { findCompanies, moreLikeThis, prefsFromRecPrefs } from '../lib/companyFinder.js'
+import { useAuth } from '../lib/AuthContext.jsx'
 import { Badge, EmptyState } from '../shared.jsx'
 import CompanyOnboarding from './CompanyOnboarding.jsx'
 
@@ -14,6 +16,7 @@ const DISMISSED_KEY = 'rec_company_dismissed'
 const TARGETS_KEY   = 'rec_target_companies' // shared with ReferralCoverageTab + DiscoverTab
 
 export default function ExploreTab({ apps = [], onFindPeople }) {
+  const { profile: studentProfile } = useAuth()
   const [prefs, setPrefs]         = useState(() => lsGet(PREFS_KEY))
   const [editing, setEditing]     = useState(() => !lsGet(PREFS_KEY)?.saved)
   const [companies, setCompanies] = useState(() => lsGet(RESULTS_KEY) || [])
@@ -41,7 +44,7 @@ export default function ExploreTab({ apps = [], onFindPeople }) {
     if (running || !prefs?.saved) return
     setRunning(true); setError(null); setNewCount(null)
     try {
-      const res = await findCompanies({ prefs, excludeNames: excludeNames(), priorResultHash: force ? null : meta.resultHash })
+      const res = await findCompanies({ prefs, excludeNames: excludeNames(), priorResultHash: force ? null : meta.resultHash, studentProfile })
       if (res.skipped) {
         persistMeta({ lastCheck: todayStr(), lastRun: Date.now(), resultHash: res.resultHash })
         setNewCount(0)
@@ -74,7 +77,7 @@ export default function ExploreTab({ apps = [], onFindPeople }) {
   async function runFindWith(p) {
     setRunning(true); setError(null); setNewCount(null)
     try {
-      const res = await findCompanies({ prefs: p, excludeNames: excludeNames(), priorResultHash: null })
+      const res = await findCompanies({ prefs: p, excludeNames: excludeNames(), priorResultHash: null, studentProfile })
       const fresh = (res.companies || []).filter(c => !dismissed.has(c.name))
       persistCompanies(fresh); persistMeta({ lastCheck: todayStr(), lastRun: Date.now(), resultHash: res.resultHash }); setNewCount(fresh.length)
     } catch (e) { setError(e.message) } finally { setRunning(false) }
@@ -95,7 +98,7 @@ export default function ExploreTab({ apps = [], onFindPeople }) {
     if (!company.website) return
     setExpanding(company.name)
     try {
-      const sims = await moreLikeThis({ website: company.website, prefs, excludeNames: [...excludeNames(), ...companies.map(nameKey)] })
+      const sims = await moreLikeThis({ website: company.website, prefs, excludeNames: [...excludeNames(), ...companies.map(nameKey)], studentProfile })
       const have = new Set(companies.map(nameKey))
       const add = (sims || []).filter(c => !have.has(nameKey(c)) && !dismissed.has(c.name))
       if (add.length) persistCompanies([...companies, ...add])
@@ -223,7 +226,7 @@ function GhBadge({ website, name }) {
       if (ghCache.has(slug)) { if (!cancelled) setInfo(ghCache.get(slug)); return }
       let result = null
       try {
-        const res = await fetch(`/gh-api/orgs/${slug}`)
+        const res = await fetch(`/gh-api/orgs/${slug}`, { headers: await authHeader() })
         if (res.ok) {
           const org = await res.json()
           const blogHost = hostOf(org.blog || '')

@@ -1,5 +1,9 @@
 import { useState, useEffect } from 'react'
-import { fetchContacts, fetchApplications, fetchInteractions } from './notion.js'
+import { fetchContacts, fetchApplications, fetchInteractions, fetchCalls } from './db.js'
+import { useAuth } from './lib/AuthContext.jsx'
+import { finishGoogleCalendarConnect } from './lib/googleAuth.js'
+import LoginPage from './components/LoginPage.jsx'
+import SettingsTab from './components/SettingsTab.jsx'
 import { STATUS_COLOR, URGENCY_COLOR, REFERRAL_STATUS_COLOR, daysSince, daysUntil, fmt, Badge, EmptyState, isOverdue } from './shared.jsx'
 import { statusIconFor, URGENCY_ICON } from './lib/icons.js'
 import AppShell from './components/layout/AppShell.jsx'
@@ -8,6 +12,8 @@ import QuickAddContactModal from './components/QuickAddContactModal.jsx'
 import ContactsTable from './components/ContactsTable.jsx'
 import LogInteractionModal from './components/LogInteractionModal.jsx'
 import KeepInTouchTab from './components/KeepInTouchTab.jsx'
+import MetButton from './components/MetButton.jsx'
+import { logMetWithContact } from './lib/quickLog.js'
 import NetworkGraphTab from './components/NetworkGraphTab.jsx'
 import OverviewTab from './components/OverviewTab.jsx'
 import PipelineTab from './components/PipelineTab.jsx'
@@ -20,6 +26,7 @@ import ReferralCoverageTab from './components/ReferralCoverageTab.jsx'
 import OutboxTab from './components/OutboxTab.jsx'
 import DiscoverTab from './components/DiscoverTab.jsx'
 import ExploreTab from './components/ExploreTab.jsx'
+import { NAV_ITEMS } from './components/layout/Sidebar.jsx'
 import { Table2, LayoutGrid, Share2, Target, Send, UserSearch, HeartHandshake } from 'lucide-react'
 
 // ── Network Tab ───────────────────────────────────────────────────────────────
@@ -34,7 +41,14 @@ const NETWORK_VIEWS = [
   { key: 'discover', label: 'Discover', icon: UserSearch },
 ]
 
-function NetworkTab({ contacts, apps, interactions, onRefresh, initialView = 'table', initialFocusCompany = null }) {
+// The public /demo route (see DemoApp below) only shows views that need zero AI/BYOK
+// keys and no deep-links into ones that do — Discover/Outbox call Exa+Claude/GPT (401s
+// with no signed-in user), Keep in Touch's "Log" leans on the same AI extraction, and
+// Coverage's "Find people" deep-links into Discover. Table/Cards/Graph are pure local
+// rendering over the seeded demo data, so they work perfectly with no backend at all.
+const DEMO_NETWORK_VIEWS = NETWORK_VIEWS.filter(v => ['table', 'cards', 'graph'].includes(v.key))
+
+function NetworkTab({ contacts, apps, interactions, onRefresh, initialView = 'table', initialFocusCompany = null, views = NETWORK_VIEWS }) {
   const [filter, setFilter]   = useState('ALL')
   const [search, setSearch]   = useState('')
   const [view, setView]       = useState(initialView) // 'table' | 'cards' | 'graph'
@@ -62,6 +76,11 @@ function NetworkTab({ contacts, apps, interactions, onRefresh, initialView = 'ta
 
   const statuses = ['ALL', '🟢 Warm', '🟡 Cooling', '🔴 Cold', '⭐ Champion', '✅ Closed']
 
+  async function handleMet(contact) {
+    await logMetWithContact(contact)
+    onRefresh()
+  }
+
   return (
     <div>
       <div className="flex gap-2 mb-4 flex-wrap items-center">
@@ -78,7 +97,7 @@ function NetworkTab({ contacts, apps, interactions, onRefresh, initialView = 'ta
           className="px-3 py-1 border border-ink-200 rounded-full text-xs focus:outline-none focus:border-accent-400 w-44" />
         <div className="ml-auto flex items-center gap-2">
           <div className="flex border border-ink-200 rounded-full overflow-hidden text-xs font-medium">
-            {NETWORK_VIEWS.map(v => (
+            {views.map(v => (
               <button key={v.key} onClick={() => setView(v.key)}
                 className={`px-3 py-1 flex items-center gap-1.5 transition-colors ${view === v.key ? 'bg-ink-900 text-white' : 'bg-white text-ink-500 hover:bg-ink-50'}`}>
                 <v.icon size={13} strokeWidth={2.25} />
@@ -101,7 +120,7 @@ function NetworkTab({ contacts, apps, interactions, onRefresh, initialView = 'ta
         ? <DiscoverTab contacts={contacts} apps={apps} interactions={interactions} onRefresh={onRefresh} focus={focusCompany} />
         : view === 'keepintouch'
         ? <KeepInTouchTab contacts={contacts} interactions={interactions}
-            onEdit={c => setEditing(c)} onLog={c => setLogContact(c)} />
+            onEdit={c => setEditing(c)} onLog={c => setLogContact(c)} onMet={handleMet} />
         : view === 'coverage'
         ? <ReferralCoverageTab contacts={contacts} apps={apps} interactions={interactions} onRefresh={onRefresh}
             onFindPeople={company => { setFocusCompany({ company, ts: Date.now() }); setView('discover') }} />
@@ -112,7 +131,7 @@ function NetworkTab({ contacts, apps, interactions, onRefresh, initialView = 'ta
         : filtered.length === 0
         ? <EmptyState msg={contacts.length === 0 ? 'No contacts yet — the email pipeline will add them as recruiting emails come in.' : 'No contacts match this filter.'} />
         : view === 'table'
-        ? <ContactsTable contacts={filtered} onEdit={c => setEditing(c)} />
+        ? <ContactsTable contacts={filtered} onEdit={c => setEditing(c)} onMet={handleMet} />
         : (
           <div className="space-y-2">
             {filtered.map(c => {
@@ -158,6 +177,7 @@ function NetworkTab({ contacts, apps, interactions, onRefresh, initialView = 'ta
                             : `Due ${fmt(c.followUpDate)}`}
                         </p>
                       )}
+                      <MetButton contact={c} onMet={handleMet} className="mt-1" />
                     </div>
                   </div>
                 </div>
@@ -206,13 +226,27 @@ function NetworkTab({ contacts, apps, interactions, onRefresh, initialView = 'ta
 
 // ── Root ──────────────────────────────────────────────────────────────────────
 
-export default function App() {
+function AuthGate({ children }) {
+  const { user, loading } = useAuth()
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-canvas flex items-center justify-center">
+        <p className="text-sm text-ink-400">Loading...</p>
+      </div>
+    )
+  }
+  if (!user) return <LoginPage />
+  return children
+}
+
+function AppInner() {
   const [tab, setTab]           = useState('overview')
   const [networkInitialView, setNetworkInitialView] = useState('table')
   const [networkFocusCompany, setNetworkFocusCompany] = useState(null)
   const [contacts, setContacts] = useState([])
   const [apps, setApps]         = useState([])
   const [interactions, setInteractions] = useState([])
+  const [calls, setCalls]       = useState([])
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState(null)
   const [lastLoaded, setLastLoaded] = useState(null)
@@ -220,12 +254,16 @@ export default function App() {
   const [addScheduleOpen, setAddScheduleOpen] = useState(false)
 
   useEffect(() => { load() }, [])
+  // Catches a fresh Google Calendar refresh token right after the "Connect
+  // Calendar" OAuth redirect back into the app (see lib/googleAuth.js) — a
+  // no-op on every other load.
+  useEffect(() => { finishGoogleCalendarConnect() }, [])
 
   async function load() {
     setLoading(true); setError(null)
     try {
-      const [c, a, i] = await Promise.all([fetchContacts(), fetchApplications(), fetchInteractions()])
-      setContacts(c); setApps(a); setInteractions(i)
+      const [c, a, i, cl] = await Promise.all([fetchContacts(), fetchApplications(), fetchInteractions(), fetchCalls()])
+      setContacts(c); setApps(a); setInteractions(i); setCalls(cl)
       setLastLoaded(new Date().toLocaleTimeString())
     } catch (e) { setError(e.message) }
     finally { setLoading(false) }
@@ -258,7 +296,7 @@ export default function App() {
       onAddSchedule={() => setAddScheduleOpen(true)}
       error={error}
     >
-      {loading && <EmptyState msg="Loading from Notion..." />}
+      {loading && <EmptyState msg="Loading your data..." />}
       {!loading && tab === 'overview' && (
         <OverviewTab contacts={contacts} apps={apps} interactions={interactions}
           onOpenGraph={() => { setNetworkInitialView('graph'); setTab('network') }}
@@ -275,8 +313,9 @@ export default function App() {
       )}
       {!loading && tab === 'pipeline' && <PipelineTab apps={apps} onRefresh={load} />}
       {!loading && tab === 'actions'  && <ActionsTab contacts={contacts} apps={apps} interactions={interactions} onRefresh={load} />}
-      {!loading && tab === 'calendar' && <CalendarTab contacts={contacts} apps={apps} onRefresh={load} />}
+      {!loading && tab === 'calendar' && <CalendarTab contacts={contacts} apps={apps} interactions={interactions} calls={calls} onRefresh={load} />}
       {tab === 'github'   && <GitHubTab apps={apps} onImported={load} />}
+      {tab === 'settings' && <SettingsTab />}
 
       {addEventOpen && <AddToCalendarModal onClose={() => setAddEventOpen(false)} />}
       {addScheduleOpen && (
@@ -287,5 +326,72 @@ export default function App() {
         />
       )}
     </AppShell>
+  )
+}
+
+// ── Demo (public /demo route, no sign-in) ───────────────────────────────────────
+//
+// Reuses the exact same tab components as the real app — db.js's isDemoMode() branch
+// (keyed off this same /demo path) means every fetch*/add*/update* call these components
+// already make transparently reads/writes an in-memory seed dataset instead of Supabase,
+// so nothing here needed forking into a separate "read-only" UI. Scope is deliberately
+// trimmed to the 4 tabs that need zero AI/BYOK keys and zero external OAuth (Overview,
+// Network table/cards/graph, Pipeline, Actions) — Explore/Discover/Outbox/Job
+// Boards/Calendar/Settings all call Claude/OpenAI/Exa/GitHub/Google proxies that
+// `requireUser()`-gate on a real signed-in session and would just 401 for an anonymous
+// visitor, so they're left out rather than shown half-broken.
+const DEMO_NAV_ITEMS = NAV_ITEMS.filter(item => ['overview', 'network', 'pipeline', 'actions'].includes(item.id))
+
+function DemoApp() {
+  const [tab, setTab] = useState('overview')
+  const [contacts, setContacts] = useState([])
+  const [apps, setApps] = useState([])
+  const [interactions, setInteractions] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => { load() }, [])
+
+  async function load() {
+    setLoading(true)
+    const [c, a, i] = await Promise.all([fetchContacts(), fetchApplications(), fetchInteractions()])
+    setContacts(c); setApps(a); setInteractions(i)
+    setLoading(false)
+  }
+
+  const activeApps = apps.filter(a => !['Rejected', 'Accepted'].includes(a.stage))
+  const overdueCount = contacts.filter(isOverdue).length
+  const counts = { network: contacts.length, pipeline: activeApps.length, actions: overdueCount > 0 ? overdueCount : null }
+
+  return (
+    <AppShell
+      activeTab={tab}
+      onTabChange={setTab}
+      counts={counts}
+      loading={loading}
+      navItems={DEMO_NAV_ITEMS}
+      demoMode
+    >
+      {loading && <EmptyState msg="Loading the demo..." />}
+      {!loading && tab === 'overview' && (
+        <OverviewTab contacts={contacts} apps={apps} interactions={interactions}
+          onOpenGraph={() => setTab('network')} onOpenActions={() => setTab('actions')} />
+      )}
+      {!loading && tab === 'network' && (
+        <NetworkTab contacts={contacts} apps={apps} interactions={interactions} onRefresh={load} views={DEMO_NETWORK_VIEWS} />
+      )}
+      {!loading && tab === 'pipeline' && <PipelineTab apps={apps} onRefresh={load} />}
+      {!loading && tab === 'actions' && <ActionsTab contacts={contacts} apps={apps} interactions={interactions} onRefresh={load} />}
+    </AppShell>
+  )
+}
+
+export default function App() {
+  const isDemo = typeof window !== 'undefined' && window.location.pathname.startsWith('/demo')
+  if (isDemo) return <DemoApp />
+
+  return (
+    <AuthGate>
+      <AppInner />
+    </AuthGate>
   )
 }

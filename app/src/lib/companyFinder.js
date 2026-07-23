@@ -1,10 +1,10 @@
 import { companySearch, exaFindSimilar } from './exa.js'
 import { filterCompanies, DOMAINS } from './ycDirectory.js'
 import { normalizeCompanyName } from './networkGraph.js'
-import { claudeJSON, CLAUDE_MODELS } from './claude.js'
+import { aiJSON, AI_MODELS } from './ai.js'
 
 // The company finder: merges YC's structured candidate pool with Exa's public-web company
-// search, dedups against companies the user already tracks/applied to, then does ONE Claude
+// search, dedups against companies the user already tracks/applied to, then does ONE AI
 // ranking call that scores each for THIS student — deliberately re-injecting the signals
 // students under-weight (mentorship, return-offer reputation, real domain interest) rather
 // than the prestige/pay they over-weight. Ranking mirrors jobBoards/helpers.js's
@@ -78,13 +78,25 @@ function profileText(prefs) {
   ].filter(Boolean).join('\n') || 'No specific preferences set'
 }
 
-async function rankCompanies(candidates, prefs) {
+// Builds the "You are an internship-search advisor for ___" line from the
+// signed-in user's Settings profile (school/grad_year/focus) instead of a
+// hardcoded persona — falls back to a generic phrase for anyone who hasn't
+// filled those fields in yet.
+function advisorFraming(studentProfile) {
+  const school = studentProfile?.school ? `a ${studentProfile.school} student` : 'a college student'
+  const focus = studentProfile?.focus === 'PM' ? 'PM primary, SWE secondary'
+    : studentProfile?.focus === 'Both' ? 'SWE and PM' : 'SWE primary, PM secondary'
+  const term = studentProfile?.grad_year ? `recruiting for internships ahead of graduating in ${studentProfile.grad_year}` : 'recruiting for internships'
+  return `You are an internship-search advisor for ${school} (${focus}) ${term}.`
+}
+
+async function rankCompanies(candidates, prefs, studentProfile) {
   if (!candidates.length) return []
   const list = candidates.slice(0, 30).map((c, i) =>
     `[${i}] ${c.name}${c.website ? ` (${c.website})` : ''}${c.industry ? ` · ${c.industry}` : ''}${c.stage ? ` · ${c.stage}` : ''}${c.teamSize ? ` · ~${c.teamSize} ppl` : ''}${c.isHiring ? ' · hiring' : ''}\n${(c.oneLiner || c.summary || '').slice(0, 240)}`
   ).join('\n\n')
 
-  const content = `You are an internship-search advisor for a University of Michigan CS sophomore (SWE primary, PM secondary) recruiting for Fall 2026. Rank the candidate companies below by genuine fit FOR HIM. Return ONLY JSON — no markdown, no explanation.
+  const content = `${advisorFraming(studentProfile)} Rank the candidate companies below by genuine fit FOR HIM. Return ONLY JSON — no markdown, no explanation.
 
 His profile:
 ${profileText(prefs)}
@@ -108,14 +120,14 @@ Return the best ${Math.min(15, candidates.length)}, best first:
   // ~15 rich objects need well over 1800 tokens; too low a cap truncates the JSON array
   // mid-element. parseJSONLoose salvages a truncation, but a comfortable cap avoids losing
   // the tail companies in the first place.
-  const parsed = await claudeJSON({ model: CLAUDE_MODELS.HAIKU, content, maxTokens: 3000 })
+  const parsed = await aiJSON({ model: AI_MODELS.STANDARD, content, maxTokens: 3000 })
   return (parsed.companies || []).filter(c => c?.name)
 }
 
 // prefs + exclusions -> { companies (ranked) | null if skipped, resultHash, skipped }.
 // skipped=true (Exa returned the same pages as priorResultHash) means the caller keeps its
-// cached ranking and pays zero Claude tokens.
-export async function findCompanies({ prefs, excludeNames = [], priorResultHash = null }) {
+// cached ranking and pays zero AI tokens.
+export async function findCompanies({ prefs, excludeNames = [], priorResultHash = null, studentProfile = null }) {
   const query = buildCompanyQuery(prefs)
   const [ycPool, exaRes] = await Promise.all([
     filterCompanies(prefs).catch(() => []),
@@ -129,13 +141,13 @@ export async function findCompanies({ prefs, excludeNames = [], priorResultHash 
   // Re-apply exclusion/dedup on the ranked output too: Exa surfaces messy page titles
   // ("Stripe | Payments") that the pre-rank filter can miss, but Claude returns a clean
   // `name`, so a company already in targets/apps can only be reliably dropped here.
-  const companies = mergeCandidates([await rankCompanies(merged, prefs)], excludeNames)
+  const companies = mergeCandidates([await rankCompanies(merged, prefs, studentProfile)], excludeNames)
   return { companies, resultHash: exaRes.resultHash, skipped: false }
 }
 
 // "More like this" from a seed company's website -> ranked similar companies.
-export async function moreLikeThis({ website, prefs, excludeNames = [] }) {
+export async function moreLikeThis({ website, prefs, excludeNames = [], studentProfile = null }) {
   const sims = await exaFindSimilar({ url: website })
   const merged = mergeCandidates([sims], excludeNames)
-  return rankCompanies(merged.slice(0, 12), prefs)
+  return rankCompanies(merged.slice(0, 12), prefs, studentProfile)
 }

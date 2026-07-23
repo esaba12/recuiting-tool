@@ -1,5 +1,5 @@
 import { exaSearch } from './exa.js'
-import { claudeJSON, CLAUDE_MODELS } from './claude.js'
+import { aiJSON, AI_MODELS } from './ai.js'
 import { affinityTagsFor, roleCategory, DEFAULT_PROFILE } from './discovery.js'
 import { normalizeCompanyName } from './networkGraph.js'
 
@@ -9,7 +9,7 @@ import { normalizeCompanyName } from './networkGraph.js'
 // strangers. It never fetches linkedin.com directly — the same compliance boundary as
 // Discover (Exa surfaces public pages; LinkedIn URLs are reference links only).
 //
-// Deliberately fail-soft: every network step is wrapped so a missing EXA/ANTHROPIC key or
+// Deliberately fail-soft: every network step is wrapped so a missing EXA/AI-provider key or
 // a flaky search degrades to "use what the user typed" rather than blocking the add. The
 // caller shows the result as an editable review card (one-tap-review save flow), so a
 // wrong web match costs a glance, not a bad Notion row.
@@ -29,7 +29,7 @@ export function roleToOption(title) {
   }
 }
 
-// Ask Claude to resolve the ONE person the user named out of the Exa result pages, and
+// Ask the AI to resolve the ONE person the user named out of the Exa result pages, and
 // clean up their title into a plain-English descriptor. Returns null on any failure.
 async function extractPerson({ name, company, whatTheyDo, results }) {
   const digest = results.slice(0, 6)
@@ -55,14 +55,14 @@ ${digest}
 {"title":"","descriptor":"","school":null,"pastCompanies":[],"programs":[],"location":null,"linkedinUrl":null}`
 
   try {
-    const parsed = await claudeJSON({ model: CLAUDE_MODELS.HAIKU, content, maxTokens: 700 })
+    const parsed = await aiJSON({ model: AI_MODELS.MINI, content, maxTokens: 700 })
     return parsed && typeof parsed === 'object' ? parsed : null
   } catch {
     return null
   }
 }
 
-// Claude-only fallback when there are no usable web results (no EXA key, or nothing found).
+// AI-only fallback when there are no usable web results (no EXA key, or nothing found).
 // Cleans the typed role into a descriptor so the review card is still "filled in" — no web
 // data (no LinkedIn / school), just a tidy interpretation of what the user typed.
 async function descriptorOnly({ name, company, whatTheyDo }) {
@@ -74,7 +74,7 @@ what they do: "${whatTheyDo || ''}"
 
 {"title":"a cleaned-up job title from 'what they do', or ''","descriptor":"one plain sentence describing their likely role, or ''"}`
   try {
-    return await claudeJSON({ model: CLAUDE_MODELS.HAIKU, content, maxTokens: 250 })
+    return await aiJSON({ model: AI_MODELS.MINI, content, maxTokens: 250 })
   } catch {
     return null
   }

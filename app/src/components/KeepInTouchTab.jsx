@@ -3,13 +3,15 @@ import { keepInTouchQueue, lastPointOfContact, DEFAULT_CADENCE } from '../lib/ke
 import { tieStrengthBucket } from '../lib/affinity.js'
 import { STATUS_COLOR, TYPE_COLOR, Badge, EmptyState, fmt } from '../shared.jsx'
 import { statusIconFor } from '../lib/icons.js'
+import MetButton from './MetButton.jsx'
 
 const TIE_LABEL = { strong: 'Close tie', moderate: 'Moderate tie', weak: 'Weak tie', cold: 'Not yet connected' }
 
 // The passive "who am I drifting out of touch with?" view. Reads purely from Last
 // Interaction + interaction history (see lib/keepInTouch.js) — no new Notion fields. Each
-// person shows their last point of contact and a one-tap way to reconnect (Log / open).
-export default function KeepInTouchTab({ contacts, interactions, onEdit, onLog }) {
+// person shows their last point of contact and two ways to reconnect: a one-tap "Met"
+// (see MetButton) for a fast record with no notes, or "Log" for the full modal.
+export default function KeepInTouchTab({ contacts, interactions, onEdit, onLog, onMet }) {
   const queue = keepInTouchQueue(contacts, interactions)
 
   return (
@@ -72,10 +74,13 @@ export default function KeepInTouchTab({ contacts, interactions, onEdit, onLog }
                           ? `${status.overdueDays}d overdue`
                           : 'Due today'}
                     </span>
-                    <button onClick={() => onLog(c)}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-accent-600 text-white rounded-full text-xs font-medium hover:bg-accent-700">
-                      <MessageSquarePlus size={12} /> Log
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <MetButton contact={c} onMet={onMet} />
+                      <button onClick={() => onLog(c)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 bg-accent-600 text-white rounded-full text-xs font-medium hover:bg-accent-700">
+                        <MessageSquarePlus size={12} /> Log
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>

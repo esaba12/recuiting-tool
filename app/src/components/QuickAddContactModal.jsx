@@ -1,18 +1,15 @@
 import { useState } from 'react'
 import { Sparkles, Loader2, Target, GraduationCap, Users, Globe, Link2 } from 'lucide-react'
-import { searchContactByName, addContact, updateContact } from '../notion.js'
+import { searchContactByName, addContact, updateContact } from '../db.js'
 import { enrichContact, fitSummary } from '../lib/enrichment.js'
 import { DEFAULT_PROFILE, DEFAULT_WEIGHTS } from '../lib/discovery.js'
 import { ROLE_OPTIONS } from '../shared.jsx'
+import { lsGet } from '../lib/scopedStorage.js'
 import Modal from './ui/Modal.jsx'
 import Button from './ui/Button.jsx'
 
 const PROFILE_KEY = 'rec_affinity_profile'   // shared with DiscoverTab
 const TARGETS_KEY = 'rec_target_companies'   // shared with Coverage/Discover
-
-function lsGet(key) {
-  try { return JSON.parse(localStorage.getItem(key) || 'null') } catch { return null }
-}
 
 // The fastest possible "add someone I know" path: type name + where they work + what they
 // do, hit ✨ Auto-fill, and the enrichment engine (Exa public-web + Claude) fills in the

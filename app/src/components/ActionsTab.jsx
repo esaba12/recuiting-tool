@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { STATUS_COLOR, URGENCY_COLOR, STAGE_COLOR, TERMINAL_STAGES, daysSince, daysUntil, fmt, Badge, EmptyState, isUntriaged, isOverdue } from '../shared.jsx'
-import { updateContact, addInteraction } from '../notion.js'
+import { updateContact, addInteraction } from '../db.js'
 import DraftPanel from './DraftPanel.jsx'
 
 export default function ActionsTab({ contacts, apps, interactions = [], onRefresh }) {

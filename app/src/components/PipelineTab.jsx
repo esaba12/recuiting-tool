@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { archiveApplication, updateApplicationTriage } from '../notion.js'
+import { archiveApplication, updateApplicationTriage } from '../db.js'
 import { STAGE_ORDER, STAGE_COLOR, TERMINAL_STAGES, daysSince, daysBetween, fmt, Badge, EmptyState, isUntriaged, findDuplicateGroups } from '../shared.jsx'
 import { BUCKET_TO_TRIAGE } from './jobBoards/helpers.js'
 import ApplicationDetailModal from './ApplicationDetailModal.jsx'

@@ -1,12 +1,21 @@
 import { useState } from 'react'
-import { BUCKET_CONFIG, BUCKET_ACTIVE, generateJobAnalysis, jobAgeDays, isGhostJob } from './helpers.js'
+import { BUCKET_CONFIG, BUCKET_ACTIVE, generateJobAnalysis, jobAgeDays, isGhostJob, urgencyTier, daysUntilDeadline } from './helpers.js'
+import { AI_PROVIDER_LABEL } from '../../lib/ai.js'
 
-export default function JobDetailModal({ job, status, blurb, onStatusChange, onClose, prefs }) {
+const DEADLINE_TEXT = {
+  urgent: 'text-danger-600 bg-danger-50',
+  soon:   'text-warning-700 bg-warning-100',
+  known:  'text-ink-600 bg-ink-100',
+}
+
+export default function JobDetailModal({ job, status, blurb, deadline, onRecheckDeadline, onStatusChange, onClose, prefs }) {
   const [analysis, setAnalysis]       = useState(null)
   const [aiLoading, setAiLoading]     = useState(false)
   const [aiError, setAiError]         = useState(null)
   const ageDays = jobAgeDays(job)
   const stale = isGhostJob(job)
+  const tier = urgencyTier(deadline)
+  const deadlineDays = daysUntilDeadline(deadline)
 
   async function doAnalysis() {
     setAiLoading(true); setAiError(null)
@@ -33,13 +42,31 @@ export default function JobDetailModal({ job, status, blurb, onStatusChange, onC
           </div>
           <div className="flex items-center gap-3 mt-3 flex-wrap text-xs text-ink-500">
             {job.location  && <span>📍 {job.location}</span>}
-            {job.dateAdded && <span>📅 {job.dateAdded}</span>}
+            {job.dateAdded && <span>📅 posted {job.dateAdded}</span>}
             {stale && (
               <span className="px-1.5 py-0.5 rounded-full bg-warning-100 text-warning-800 text-[10px] font-medium">
                 👻 No update in {ageDays}d
               </span>
             )}
           </div>
+          <div className="mt-2 flex items-center gap-2 flex-wrap">
+            {tier === 'urgent' || tier === 'soon' || tier === 'known' ? (
+              <span className={`px-2 py-1 rounded-lg text-xs font-semibold ${DEADLINE_TEXT[tier]}`}>
+                ⏰ {deadlineDays < 0 ? 'Deadline passed' : deadlineDays === 0 ? 'Closes today' : `Closes in ${deadlineDays}d`} ({deadline.deadline})
+              </span>
+            ) : tier === 'rolling' ? (
+              <span className="px-2 py-1 rounded-lg text-xs font-medium bg-ink-50 text-ink-500">🔄 Rolling — no stated deadline</span>
+            ) : (
+              <span className="px-2 py-1 rounded-lg text-xs text-ink-400">⏳ Checking apply page for a real deadline…</span>
+            )}
+            <button onClick={onRecheckDeadline} title="Re-fetch the apply page and re-check for a deadline"
+              className="text-xs text-ink-400 hover:text-accent-600 underline">
+              ↻ recheck
+            </button>
+          </div>
+          {deadline?.note && tier !== 'unknown' && (
+            <p className="text-[11px] text-ink-400 mt-1 italic">"{deadline.note}"</p>
+          )}
           {stale && (
             <p className="text-[11px] text-warning-700 mt-1.5">
               27-48% of tech postings show ghost-job characteristics — this one's been stale a while. Worth a quick check before spending an application on it.
@@ -87,7 +114,7 @@ export default function JobDetailModal({ job, status, blurb, onStatusChange, onC
           {aiLoading && (
             <div className="flex items-center gap-2 text-xs text-ink-400">
               <div className="w-3 h-3 border-2 border-accent-400 border-t-transparent rounded-full animate-spin" />
-              Analyzing with Claude Haiku...
+              Analyzing with {AI_PROVIDER_LABEL}...
             </div>
           )}
 
@@ -154,7 +181,7 @@ export default function JobDetailModal({ job, status, blurb, onStatusChange, onC
 
           {!analysis && !aiLoading && !aiError && (
             <p className="text-xs text-ink-400">
-              Claude Haiku (~$0.0001) reads your preferences and gives personalized pros/cons.
+              {AI_PROVIDER_LABEL} reads your preferences and gives personalized pros/cons.
               {Object.keys(prefs).filter(k => prefs[k]).length === 0 &&
                 ' Set your preferences above for a more targeted analysis.'}
             </p>

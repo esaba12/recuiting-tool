@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { listEvents } from '../googleCalendar.js'
-import { updateApplicationTriage, archiveApplication } from '../notion.js'
+import { updateApplicationTriage, archiveApplication } from '../db.js'
 import { BUCKET_TO_TRIAGE, MONTH_NAMES } from './jobBoards/helpers.js'
 import { Badge } from '../shared.jsx'
 import ContactDetailModal from './ContactDetailModal.jsx'
 import ApplicationDetailModal from './ApplicationDetailModal.jsx'
 import EventDetailModal from './EventDetailModal.jsx'
 import AddEventModal from './AddEventModal.jsx'
+import TimelineFindsPanel from './TimelineFindsPanel.jsx'
 
 const OVERLAYS = [
   { key: 'events',       label: 'Events',       dot: 'bg-accent-600',  chipActive: 'bg-accent-600 text-white border-accent-600' },
@@ -25,7 +26,7 @@ function eventDayKey(event) {
   return dayKey(d.getFullYear(), d.getMonth(), d.getDate())
 }
 
-export default function CalendarTab({ contacts, apps, onRefresh }) {
+export default function CalendarTab({ contacts, apps, interactions, calls, onRefresh }) {
   const [viewDate, setViewDate] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1))
   const [eventsByMonth, setEventsByMonth] = useState({}) // 'YYYY-MM' -> normalized event[]
   const [loadingEvents, setLoadingEvents] = useState(false)
@@ -108,6 +109,9 @@ export default function CalendarTab({ contacts, apps, onRefresh }) {
 
   return (
     <div className="space-y-4">
+      <TimelineFindsPanel apps={apps} calls={calls} interactions={interactions} contacts={contacts}
+        onEventCreated={refetchMonth} />
+
       {/* Overlay toggles + add event */}
       <div className="flex gap-2 flex-wrap items-center">
         {OVERLAYS.map(o => (

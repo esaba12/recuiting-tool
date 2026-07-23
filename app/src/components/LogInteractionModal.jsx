@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Phone, MessageCircle, Users, Mail, MoreHorizontal } from 'lucide-react'
-import { searchContactByName, addContact, addCallEntry, addInteraction, updateContact } from '../notion.js'
-import { claudeJSON, CLAUDE_MODELS } from '../lib/claude.js'
+import { searchContactByName, addContact, addCallEntry, addInteraction, updateContact } from '../db.js'
+import { aiJSON, AI_MODELS, AI_PROVIDER_LABEL } from '../lib/ai.js'
 import { AFFINITY_OPTIONS } from '../shared.jsx'
 import Modal from './ui/Modal.jsx'
 import Button from './ui/Button.jsx'
@@ -18,7 +18,7 @@ const CHANNELS = [
 const CHANNEL_TO_TYPE = { call: 'Call', linkedin: 'LinkedIn', meeting: 'Meeting', email: 'Email', other: 'Other' }
 const TRANSCRIPT_CHANNELS = new Set(['call', 'linkedin'])
 
-async function extractWithClaude(channel, text) {
+async function extractWithAI(channel, text) {
   const isCall = channel === 'call'
   const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
   const prompt = isCall
@@ -52,7 +52,7 @@ ${text}`
 LinkedIn conversation:
 ${text}`
 
-  return claudeJSON({ model: CLAUDE_MODELS.SONNET, content: prompt, maxTokens: 1000 })
+  return aiJSON({ model: AI_MODELS.STANDARD, content: prompt, maxTokens: 1000 })
 }
 
 export default function LogInteractionModal({ contacts = [], contact = null, onClose, onSaved }) {
@@ -96,7 +96,7 @@ export default function LogInteractionModal({ contacts = [], contact = null, onC
   async function extract() {
     if (!text.trim()) return
     setExtracting(true); setError(null); setExtracted(null); setEdit({})
-    try { setExtracted(await extractWithClaude(channel, text)) }
+    try { setExtracted(await extractWithAI(channel, text)) }
     catch (e) { setError(e.message) }
     finally { setExtracting(false) }
   }
@@ -180,15 +180,15 @@ export default function LogInteractionModal({ contacts = [], contact = null, onC
               </p>
               <p className="text-xs text-ink-400 mb-3">
                 {channel === 'call'
-                  ? 'After a call ends, copy the summary from Granola and paste it here. Claude extracts the contact, key insights, and writes a follow-up draft.'
-                  : 'Copy the message thread from LinkedIn and paste it here. Claude extracts the contact and a summary — no LinkedIn automation or account risk involved.'}
+                  ? `After a call ends, copy the summary from Granola and paste it here. ${AI_PROVIDER_LABEL} extracts the contact, key insights, and writes a follow-up draft.`
+                  : `Copy the message thread from LinkedIn and paste it here. ${AI_PROVIDER_LABEL} extracts the contact and a summary — no LinkedIn automation or account risk involved.`}
               </p>
               <textarea value={text} onChange={e => setText(e.target.value)}
                 placeholder={channel === 'call' ? 'Paste your Granola call notes or summary here...' : 'Paste the LinkedIn conversation here...'}
                 rows={7}
                 className="w-full px-4 py-3 border border-ink-200 rounded-xl text-sm focus:outline-none focus:border-accent-400 resize-none font-mono bg-ink-50" />
               <Button onClick={extract} disabled={extracting || !text.trim()} className="mt-2">
-                {extracting ? 'Extracting...' : 'Extract with Claude →'}
+                {extracting ? 'Extracting...' : `Extract with ${AI_PROVIDER_LABEL} →`}
               </Button>
             </div>
 

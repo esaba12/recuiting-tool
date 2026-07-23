@@ -5,6 +5,7 @@ import {
 } from '@tanstack/react-table'
 import { STATUS_COLOR, URGENCY_COLOR, REFERRAL_STATUS_COLOR, Badge, fmt, daysUntil } from '../shared.jsx'
 import { statusIconFor, URGENCY_ICON } from '../lib/icons.js'
+import MetButton from './MetButton.jsx'
 
 const col = createColumnHelper()
 
@@ -19,7 +20,7 @@ function FacetFilter({ column, options }) {
   )
 }
 
-export default function ContactsTable({ contacts, onEdit }) {
+export default function ContactsTable({ contacts, onEdit, onMet }) {
   const [sorting, setSorting] = useState([{ id: 'urgency', desc: false }])
   const [columnFilters, setColumnFilters] = useState([])
 
@@ -93,7 +94,12 @@ export default function ContactsTable({ contacts, onEdit }) {
         </div>
       ),
     }),
-  ], [])
+    col.display({
+      id: 'met',
+      header: '',
+      cell: info => <MetButton contact={info.row.original} onMet={onMet} />,
+    }),
+  ], [onMet])
 
   const uniq = (key) => [...new Set(contacts.map(c => c[key]).filter(Boolean))].sort()
 
