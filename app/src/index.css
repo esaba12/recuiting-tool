@@ -63,15 +63,6 @@
   --color-danger-700: #8a2c2c;
 }
 
-/* Angular "hex-panel" chamfer — cuts the top-left/bottom-right corners instead of
-   rounding them, for nav-rail surfaces that want a faceted look instead of pills. */
-.hex-cut {
-  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
-}
-.hex-cut-sm {
-  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
-}
-
 body {
   font-family: var(--font-body);
 }
